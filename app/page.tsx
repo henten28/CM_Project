@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getProfile, type AshaProfile } from "@/lib/profile-store";
 import { getDueReviews } from "@/lib/spaced-repetition";
+import { startSession } from "@/lib/api-client";
 
 const T = {
   kn: {
@@ -36,7 +37,7 @@ const T = {
       { value: "sharing", label: "ಔಷಧ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ" },
       { value: "case study", label: "ಕೇಸ್ ಸ್ಟಡಿ" },
     ],
-    times: ["10","15","20","30","45"],
+    times: ["5","10","15"],
     powered: "ಬಹು-ಏಜೆಂಟ್ AI • ಕನ್ನಡ-ಮೊದಲ • NCDC ಮೂಲ",
   },
   en: {
@@ -69,7 +70,7 @@ const T = {
       { value: "sharing", label: "Don't share medicines" },
       { value: "case study", label: "Case Studies" },
     ],
-    times: ["10","15","20","30","45"],
+    times: ["5","10","15"],
     powered: "Multi-agent AI • Kannada-first • NCDC-sourced",
   },
   hi: {
@@ -102,7 +103,7 @@ const T = {
       { value: "sharing", label: "दवाएं साझा न करें" },
       { value: "case study", label: "केस अध्ययन" },
     ],
-    times: ["10","15","20","30","45"],
+    times: ["5","10","15"],
     powered: "बहु-एजेंट AI • कन्नड़-प्रथम • NCDC स्रोत",
   },
 };
@@ -111,7 +112,7 @@ export default function LandingPage() {
   const [lang, setLang] = useState<"kn" | "en" | "hi">("kn");
   const [role, setRole] = useState<"asha" | "supervisor" | null>(null);
   const [topic, setTopic] = useState("general");
-  const [minutes, setMinutes] = useState("20");
+  const [minutes, setMinutes] = useState("10");
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<AshaProfile | null>(null);
   const [dueReviews, setDueReviews] = useState<{ tag: string; label: Record<string,string> }[]>([]);
@@ -129,13 +130,12 @@ export default function LandingPage() {
     if (role !== "asha") return;
     setLoading(true);
     try {
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start", lang, topic, availableMinutes: Number(minutes) }),
-      });
-      const data = await res.json();
-      if (data.ok) router.push(`/session?id=${data.session.id}&lang=${lang}`);
+      // spaced-repetition gaps go to the planning agent as prior gaps
+      const data = await startSession({ topic, durationMinutes: Number(minutes) as 5 | 10 | 15, lang,
+                                        priorGaps: dueReviews.map((r) => r.tag) });
+      router.push(`/session?id=${data.sessionId}&lang=${lang}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not reach the backend");
     } finally { setLoading(false); }
   }
 

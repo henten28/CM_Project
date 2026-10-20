@@ -2,15 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { SessionRecord, QuizQuestion } from "@/lib/session-store";
-import type { ContentBlock } from "@/lib/content-library";
-import type { SessionSummary } from "@/lib/agents/summary";
-import { classify } from "@/lib/safety";
+import { getSession, approvePlan, submitAnswers, askQuestion, completeSession, pick, voiceLang,
+  type SessionRecord, type ContentHit, type QuizItem, type SessionSummary, type SafetyResult, type Level } from "@/lib/api-client";
 import { logSafetyEvent } from "@/lib/safety-log";
 import { recordGap, getDueReviews } from "@/lib/spaced-repetition";
 import { getProfile, incrementSessions } from "@/lib/profile-store";
 
-type Phase = "loading" | "planning" | "approval" | "teaching" | "quiz" | "summary";
+// hold: safety hold at start, or a reloaded session that can only be finished
+type Phase = "loading" | "planning" | "approval" | "teaching" | "quiz" | "summary" | "hold";
 type Lang = "kn" | "en" | "hi";
 
 interface Message { role: "agent"|"user"|"system"; text: string; agentName?: string; }
@@ -21,7 +20,7 @@ const STEPS: Record<Lang, string[]> = {
   hi: ["योजना","अनुमोदन","सीखना","प्रश्नोत्तरी","सारांश"],
 };
 
-const PHASE_STEP: Record<Phase,number> = { loading:0,planning:0,approval:1,teaching:2,quiz:3,summary:4 };
+const PHASE_STEP: Record<Phase,number> = { loading:0,planning:0,approval:1,teaching:2,quiz:3,summary:4,hold:0 };
 
 // ── Voice helpers ─────────────────────────────────────────────────────────────
 
@@ -29,7 +28,7 @@ function speak(text: string, lang: Lang) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = lang === "kn" ? "kn-IN" : lang === "hi" ? "hi-IN" : "en-IN";
+  utter.lang = voiceLang(lang);
   utter.rate = 0.9;
   window.speechSynthesis.speak(utter);
 }
@@ -38,15 +37,11 @@ function stopSpeak() {
   if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
-// ── Adaptive difficulty helper ────────────────────────────────────────────────
-// Returns "easy" | "medium" | "hard" based on running score percentage
+// difficulty level now comes from the backend tutor agent (fixed thresholds there)
 
-function adaptiveDifficulty(correct: number, total: number): "easy"|"medium"|"hard" {
-  if (total === 0) return "medium";
-  const pct = (correct / total) * 100;
-  if (pct >= 80) return "hard";
-  if (pct >= 40) return "medium";
-  return "easy";
+// local safety log only knows the old three categories
+function logCategory(c: SafetyResult["category"]): "URGENT"|"PRESCRIBING"|"PERSONAL_MEDICAL" {
+  return c === "URGENT" ? "URGENT" : c === "PERSONAL_MEDICAL" ? "PERSONAL_MEDICAL" : "PRESCRIBING";
 }
 
 function SessionContent() {
@@ -59,15 +54,16 @@ function SessionContent() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [session, setSession] = useState<SessionRecord | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [blocks, setBlocks] = useState<ContentBlock[]>([]);
+  const [blocks, setBlocks] = useState<ContentHit[]>([]);
   const [currentBlockIdx, setCurrentBlockIdx] = useState(0);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [questions, setQuestions] = useState<QuizItem[]>([]);
   const [currentQIdx, setCurrentQIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [answerResult, setAnswerResult] = useState<{correct:boolean;explanation:{kn:string;en:string}}|null>(null);
+  const [answerResult, setAnswerResult] = useState<{correct:boolean;explanation:{kn:string;en:string};reinforcement:ContentHit[]}|null>(null);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [userInput, setUserInput] = useState("");
-  const [safetyAlert, setSafetyAlert] = useState<{kn:string;en:string;hi?:string;type:string}|null>(null);
+  const [safetyAlert, setSafetyAlert] = useState<{kn:string;en:string;hi:string;type:string}|null>(null);
+  const [level, setLevel] = useState<Level|null>(null);
   const [agentStatus, setAgentStatus] = useState<string|null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -80,6 +76,8 @@ function SessionContent() {
   const recognitionRef = useRef<any>(null);
 
   const fk = lang === "kn" ? "kn" : "";
+  // reviewed content is kn/en only, so Hindi sessions read (and speak) English content
+  const contentLang: Lang = lang === "kn" ? "kn" : "en";
 
   function L(kn:string,en:string,hi:string="") { return lang==="kn"?kn:lang==="hi"?(hi||en):en; }
 
@@ -91,12 +89,12 @@ function SessionContent() {
   useEffect(() => { setDueReviews(getDueReviews()); }, []);
 
   // TTS control
-  function handleSpeak(text: string) {
+  function handleSpeak(text: string, voice: Lang = contentLang) {
     if (isSpeaking) { stopSpeak(); setIsSpeaking(false); return; }
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = lang === "kn" ? "kn-IN" : lang === "hi" ? "hi-IN" : "en-IN";
+    utter.lang = voiceLang(voice);
     utter.rate = 0.9;
     utter.onend = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utter);
@@ -118,13 +116,13 @@ function SessionContent() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rec = new SR() as any;
-    rec.lang = lang === "kn" ? "kn-IN" : lang === "hi" ? "hi-IN" : "en-IN";
+    rec.lang = voiceLang(lang);
     rec.interimResults = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
       const transcript = e.results[0][0].transcript;
-      setUserInput(transcript);
       setIsListening(false);
+      sendText(transcript);  // spoken questions go through the backend safety controller like typed ones
     };
     rec.onerror = () => setIsListening(false);
     rec.onend = () => setIsListening(false);
@@ -133,48 +131,62 @@ function SessionContent() {
     setIsListening(true);
   }
 
+  // errors from the backend show up as a system line instead of failing silently
+  function showError(e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    pushMsg({role:"system",text:L(`⚠️ ಸರ್ವರ್ ದೋಷ: ${msg}`,`⚠️ Server error: ${msg}`,`⚠️ सर्वर त्रुटि: ${msg}`)});
+    setAgentStatus(null);
+  }
+
+  // fixed referral banner from the backend safety controller; shown before anything else
+  function showSafety(res: SafetyResult) {
+    if (!res.triggered || !res.message) return;
+    setSafetyAlert({...res.message, type: res.category});
+    logSafetyEvent({sessionId, category: logCategory(res.category), trigger: res.ruleId ?? "", lang});
+  }
+
   // Init
   useEffect(() => {
     async function init() {
       setAgentStatus(L("ಯೋಜನಾ ಏಜೆಂಟ್ ಕೆಲಸ ಮಾಡುತ್ತಿದೆ…","Planning Agent working…","योजना एजेंट काम कर रहा है…"));
       setPhase("planning");
-      const res = await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get",sessionId})});
-      const data = await res.json();
-      if (!data.ok){router.push("/");return;}
-      const s:SessionRecord = data.session;
+      let s: SessionRecord;
+      try { s = await getSession(sessionId); }
+      catch { router.push("/"); return; }
       setSession(s);
-      pushMsg({role:"agent",agentName:L("ಯೋಜನಾ ಏಜೆಂಟ್","Planning Agent","योजना एजेंट"),
-        text:L(`ನಮಸ್ಕಾರ ${profile?.name??""}! "${s.topic}" ವಿಷಯಕ್ಕಾಗಿ ${s.availableMinutes} ನಿಮಿಷದ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧ.`,
-               `Hello ${profile?.name??""}! ${s.availableMinutes}-min lesson plan for "${s.topic}" ready. Please review.`,
-               `नमस्ते ${profile?.name??""}! "${s.topic}" के लिए ${s.availableMinutes} मिनट की पाठ योजना तैयार है।`)});
       setAgentStatus(null);
+      if (s.state === "SAFETY_HOLD") {
+        if (s.startSafety) showSafety(s.startSafety);
+        setPhase("hold");
+        return;
+      }
+      if (s.state === "COMPLETED" && s.summary) { setSummary(s.summary); setPhase("summary"); return; }
+      if (s.state === "IN_PROGRESS") {
+        // content and quiz state live in the page, so a reloaded session can only be finished
+        pushMsg({role:"system",text:L("ಈ ಅಧಿವೇಶನ ಈಗಾಗಲೇ ನಡೆಯುತ್ತಿದೆ.","This session is already in progress.","यह सत्र पहले से चल रहा है।")});
+        setPhase("hold");
+        return;
+      }
+      pushMsg({role:"agent",agentName:L("ಯೋಜನಾ ಏಜೆಂಟ್","Planning Agent","योजना एजेंट"),
+        text:L(`ನಮಸ್ಕಾರ ${profile?.name??""}! "${s.topic}" ವಿಷಯಕ್ಕಾಗಿ ${s.durationMinutes} ನಿಮಿಷದ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧ.`,
+               `Hello ${profile?.name??""}! ${s.durationMinutes}-min lesson plan for "${s.topic}" ready. Please review.`,
+               `नमस्ते ${profile?.name??""}! "${s.topic}" के लिए ${s.durationMinutes} मिनट की पाठ योजना तैयार है।`)});
       setPhase("approval");
     }
     if (sessionId) init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  function checkSafety(text: string): boolean {
-    const result = classify(text);
-    if (result.category !== "SAFE" && result.message) {
-      setSafetyAlert({...result.message, hi: result.message.en, type: result.category});
-      logSafetyEvent({sessionId, category:result.category, trigger:result.triggeredBy??"", lang});
-      return false;
-    }
-    setSafetyAlert(null);
-    return true;
-  }
-
   async function handleApprove() {
     setAgentStatus(L("ಹುಡುಕಾಟ ಏಜೆಂಟ್ ವಿಷಯ ತರುತ್ತಿದೆ…","Retrieval Agent fetching content…","पुनर्प्राप्ति एजेंट सामग्री ला रहा है…"));
-    const res = await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"approve",sessionId})});
-    const data = await res.json();
-    if (!data.ok) return;
-    setBlocks(data.blocks);
-    setSession(data.session);
-    pushMsg({role:"system",text:L(`✅ ಪಾಠ ಯೋಜನೆ ಅನುಮೋದಿಸಲಾಗಿದೆ. ${data.blocks.length} ವಿಷಯ ಬ್ಲಾಕ್‌ಗಳು ಲೋಡ್.`,`✅ Lesson plan approved. ${data.blocks.length} content block(s) loaded.`,`✅ पाठ योजना अनुमोदित। ${data.blocks.length} सामग्री ब्लॉक लोड।`)});
-    setAgentStatus(null);
-    setPhase("teaching");
+    try {
+      const data = await approvePlan(sessionId);
+      setBlocks(data.content.hits);
+      setQuestions(data.questions);  // checkpoint quiz chosen by the tutor agent
+      pushMsg({role:"system",text:L(`✅ ಪಾಠ ಯೋಜನೆ ಅನುಮೋದಿಸಲಾಗಿದೆ. ${data.content.hits.length} ವಿಷಯ ಬ್ಲಾಕ್‌ಗಳು ಲೋಡ್.`,`✅ Lesson plan approved. ${data.content.hits.length} content block(s) loaded.`,`✅ पाठ योजना अनुमोदित। ${data.content.hits.length} सामग्री ब्लॉक लोड।`)});
+      setAgentStatus(null);
+      setPhase("teaching");
+    } catch (e) { showError(e); }
   }
 
   function handleReject() {
@@ -182,50 +194,62 @@ function SessionContent() {
     setTimeout(()=>router.push("/"),1500);
   }
 
-  async function handleSendMessage() {
-    if (!userInput.trim()) return;
-    const text = userInput.trim();
+  async function sendText(raw: string) {
+    const text = raw.trim();
+    if (!text) return;
     setUserInput("");
-    if (!checkSafety(text)){pushMsg({role:"user",text});return;}
     pushMsg({role:"user",text});
-    pushMsg({role:"agent",agentName:L("ಶಿಕ್ಷಕ ಏಜೆಂಟ್","Tutor Agent","ट्यूटर एजेंट"),
-      text:L("ನಿಮ್ಮ ಪ್ರಶ್ನೆ ಗಮನಿಸಿದ್ದೇನೆ. ಮೇಲಿನ ವಿಷಯ ಓದಿ — ಮುಂದಿನ ಬ್ಲಾಕ್‌ನಲ್ಲಿ ಉತ್ತರ ಸಿಗಬಹುದು.",
-              "Noted! Please review the content blocks above — the answer may be in the next section.",
-              "नोट किया! कृपया ऊपर सामग्री ब्लॉक देखें — उत्तर अगले अनुभाग में हो सकता है।")});
+    try {
+      const data = await askQuestion(sessionId, text);
+      if (data.safety?.triggered) { showSafety(data.safety); return; }  // hard override: no agent answer
+      setSafetyAlert(null);
+      const hit = data.content?.hits[0];
+      pushMsg({role:"agent",agentName:L("ಹುಡುಕಾಟ ಏಜೆಂಟ್","Retrieval Agent","पुनर्प्राप्ति एजेंट"),
+        text: hit
+          ? `${pick(hit.title,contentLang)}\n${pick(hit.body,contentLang)}\n📚 ${hit.source}`
+          : L("ಅನುಮೋದಿತ ವಿಷಯದಲ್ಲಿ ಉತ್ತರ ಸಿಗಲಿಲ್ಲ. ANM ಅವರನ್ನು ಕೇಳಿ.","No approved content matches this question. Please ask the ANM.","स्वीकृत सामग्री में उत्तर नहीं मिला। कृपया ANM से पूछें।")});
+    } catch (e) { showError(e); }
   }
 
-  async function handleStartQuiz() {
-    setAgentStatus(L("ಶಿಕ್ಷಕ ಏಜೆಂಟ್ ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧ ಮಾಡುತ್ತಿದೆ…","Tutor Agent preparing quiz…","ट्यूटर एजेंट प्रश्नोत्तरी तैयार कर रहा है…"));
-    const res = await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"quiz",sessionId})});
-    const data = await res.json();
-    if (!data.ok) return;
-    setSession(data.session);
-    setQuestions(data.session.quizQuestions);
+  function handleSendMessage() { sendText(userInput); }
+
+  function handleStartQuiz() {
+    // questions already came back with the approved plan
     setCurrentQIdx(0);setSelectedOption(null);setAnswerResult(null);
-    setAgentStatus(null);setPhase("quiz");
-    const qCount = data.session.quizQuestions.length;
-    const diff = adaptiveDifficulty(quizCorrect, quizTotal);
+    setPhase("quiz");
     pushMsg({role:"agent",agentName:L("ಶಿಕ್ಷಕ ಏಜೆಂಟ್","Tutor Agent","ट्यूटर एजेंट"),
-      text:L(`ರಸಪ್ರಶ್ನೆ ಪ್ರಾರಂಭ! ${qCount} ಪ್ರಶ್ನೆ. ಕಷ್ಟ: ${diff==="hard"?"ಕಷ್ಟ":diff==="easy"?"ಸುಲಭ":"ಮಧ್ಯಮ"}.`,
-              `Quiz time! ${qCount} question(s). Difficulty: ${diff} (adaptive based on your score).`,
-              `प्रश्नोत्तरी! ${qCount} प्रश्न। कठिनाई: ${diff==="hard"?"कठिन":diff==="easy"?"आसान":"मध्यम"}।`)});
+      text:L(`ರಸಪ್ರಶ್ನೆ ಪ್ರಾರಂಭ! ${questions.length} ಪ್ರಶ್ನೆ. ಕಷ್ಟ ನಿಮ್ಮ ಅಂಕಕ್ಕೆ ಹೊಂದಿಕೊಳ್ಳುತ್ತದೆ.`,
+              `Quiz time! ${questions.length} question(s). Difficulty adapts to your score.`,
+              `प्रश्नोत्तरी! ${questions.length} प्रश्न। कठिनाई आपके स्कोर के अनुसार बदलेगी।`)});
   }
 
   async function handleAnswer(idx: number) {
     if (selectedOption !== null) return;
     setSelectedOption(idx);
     const q = questions[currentQIdx];
-    const res = await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"answer",sessionId,questionId:q.id,selectedIndex:idx})});
-    const data = await res.json();
-    if (!data.ok) return;
-    setAnswerResult(data);
-    setSession(data.session);
-    const isCorrect = data.correct;
-    setQuizTotal(t=>t+1);
-    if (isCorrect) setQuizCorrect(c=>c+1);
-    else { recordGap(q.conceptTag); }
-    if (isCorrect && isSpeaking) stopSpeak();
-    speak(isCorrect ? L("ಸರಿಯಾಗಿದೆ!","Correct!","सही!") : L("ತಪ್ಪಾಗಿದೆ.","Incorrect.","गलत।"), lang);
+    try {
+      const data = await submitAnswers(sessionId, [{questionId:q.id, selectedIndex:idx}]);
+      const t = data.tutor;
+      const fb = t.feedback[0];
+      const reinforcement = data.content.hits.filter(h => fb.reinforcementContentIds.includes(h.id));
+      setAnswerResult({correct:fb.correct, explanation:fb.explanation, reinforcement});
+      setQuizTotal(t.answered);
+      setQuizCorrect(t.correct);
+      setLevel(t.nextActivity.level);
+      // adaptive loop: append the tutor's next questions, gaps first
+      setQuestions(prev => [...prev, ...t.nextQuestions.filter(n => !prev.some(p => p.id === n.id))]);
+      if (!fb.correct) recordGap(q.conceptTag);
+      speak(fb.correct ? L("ಸರಿಯಾಗಿದೆ!","Correct!","सही!") : L("ತಪ್ಪಾಗಿದೆ.","Incorrect.","गलत।"), lang);
+    } catch (e) { setSelectedOption(null); showError(e); }
+  }
+
+  async function finishSession() {
+    setAgentStatus(L("ಸಾರಾಂಶ ಏಜೆಂಟ್ ವರದಿ ತಯಾರಿಸುತ್ತಿದೆ…","Summary Agent generating report…","सारांश एजेंट रिपोर्ट तैयार कर रहा है…"));
+    try {
+      const data = await completeSession(sessionId);
+      setSummary(data.summary);setAgentStatus(null);setPhase("summary");
+      incrementSessions();
+    } catch (e) { showError(e); }
   }
 
   async function handleNext() {
@@ -233,12 +257,7 @@ function SessionContent() {
     if (currentQIdx+1 < questions.length){
       setCurrentQIdx(i=>i+1);setSelectedOption(null);setAnswerResult(null);
     } else {
-      setAgentStatus(L("ಸಾರಾಂಶ ಏಜೆಂಟ್ ವರದಿ ತಯಾರಿಸುತ್ತಿದೆ…","Summary Agent generating report…","सारांश एजेंट रिपोर्ट तैयार कर रहा है…"));
-      const res = await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"summary",sessionId})});
-      const data = await res.json();
-      if (!data.ok) return;
-      setSummary(data.summary);setSession(data.session);setAgentStatus(null);setPhase("summary");
-      incrementSessions();
+      await finishSession();
     }
   }
 
@@ -246,6 +265,7 @@ function SessionContent() {
   const steps = STEPS[lang];
   const currentBlock = blocks[currentBlockIdx] ?? null;
   const currentQ = questions[currentQIdx] ?? null;
+  const lvl: Level = level ?? "medium";  // tutor agent level; medium until the first answer
 
   const MODULES_MAP: Record<string,{title:Record<Lang,string>;icon:string}> = {
     m1:{title:{kn:"ಪ್ರತಿಜೀವಕಗಳು ಏನು?",en:"What are antibiotics?",hi:"एंटीबायोटिक्स क्या हैं?"},icon:"💊"},
@@ -286,8 +306,8 @@ function SessionContent() {
       {quizTotal > 0 && (
         <div style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"6px 16px",display:"flex",alignItems:"center",gap:8,fontSize:"0.75rem",color:"var(--text-muted)"}}>
           <span>🎯 {L("ಹೊಂದಾಣಿಕೆ ತೊಂದರೆ","Adaptive difficulty","अनुकूली कठिनाई")}:</span>
-          <span className={`badge ${adaptiveDifficulty(quizCorrect,quizTotal)==="hard"?"badge-red":adaptiveDifficulty(quizCorrect,quizTotal)==="easy"?"badge-green":"badge-amber"}`}>
-            {adaptiveDifficulty(quizCorrect,quizTotal)}{" "}({quizCorrect}/{quizTotal})
+          <span className={`badge ${lvl==="hard"?"badge-red":lvl==="easy"?"badge-green":"badge-amber"}`}>
+            {lvl}{" "}({quizCorrect}/{quizTotal})
           </span>
           {dueReviews.length > 0 && <span className="badge badge-amber ml-2">📚 {dueReviews.length} {L("ಪುನರಾವಲೋಕನ","review(s) due","समीक्षा")}</span>}
         </div>
@@ -296,11 +316,13 @@ function SessionContent() {
       <div className="session-body">
         {/* Safety banner */}
         {safetyAlert && (
-          <div className="safety-banner mb-3">
+          // sticky so auto-scroll to the newest message never hides the referral
+          <div className="safety-banner mb-3" style={{position:"sticky",top:0,zIndex:10}}>
             <div className="sb-icon">{safetyAlert.type==="URGENT"?"🚨":"⚠️"}</div>
             <div>
               <div className="sb-title">{safetyAlert.type==="URGENT"?L("ತುರ್ತು","URGENT","आपातकाल"):L("ಗಮನಿಸಿ","Notice","ध्यान दें")}</div>
-              <div className={`sb-body ${fk}`}>{lang==="kn"?safetyAlert.kn:lang==="hi"?(safetyAlert.hi??safetyAlert.en):safetyAlert.en}</div>
+              <div className={`sb-body ${fk}`}>{lang==="kn"?safetyAlert.kn:lang==="hi"?safetyAlert.hi:safetyAlert.en}</div>
+              <button className="btn btn-ghost btn-sm mt-1" onClick={()=>handleSpeak((lang==="kn"?safetyAlert.kn:lang==="hi"?safetyAlert.hi:safetyAlert.en).replace(/\*/g,""),lang)}>🔊 {L("ಕೇಳಿ","Listen","सुनें")}</button>
             </div>
           </div>
         )}
@@ -321,10 +343,10 @@ function SessionContent() {
         </div>
 
         {/* Approval panel */}
-        {phase==="approval"&&session?.lessonPlan&&(
+        {phase==="approval"&&session?.plan&&(
           <div className="approval-panel animate-slide">
             <h4 className={fk}>{L("📋 ಪಾಠ ಯೋಜನೆ — ASHA ಅನುಮೋದನೆ","📋 Lesson Plan — ASHA Approval","📋 पाठ योजना — ASHA अनुमोदन")}</h4>
-            {session.lessonPlan.map(lm=>{
+            {session.plan.lessonPlan.map(lm=>{
               const mod=MODULES_MAP[lm.moduleId]??{title:{kn:lm.moduleId,en:lm.moduleId,hi:lm.moduleId},icon:"📚"};
               return(
                 <div key={lm.moduleId} className="module-item">
@@ -350,21 +372,21 @@ function SessionContent() {
             {currentBlock&&(
               <div className="content-block animate-fade">
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className={`font-bold ${fk}`} style={{fontSize:"1rem",color:"var(--primary)",flex:1}}>{currentBlock.title[lang as "kn"|"en"] ?? currentBlock.title.en}</h3>
+                  <h3 className={`font-bold ${fk}`} style={{fontSize:"1rem",color:"var(--primary)",flex:1}}>{pick(currentBlock.title,contentLang)}</h3>
                   {/* TTS button */}
-                  <button onClick={()=>handleSpeak((currentBlock.title[lang as "kn"|"en"]??currentBlock.title.en)+" "+( currentBlock.body[lang as "kn"|"en"]??currentBlock.body.en))}
+                  <button onClick={()=>handleSpeak(pick(currentBlock.title,contentLang)+". "+pick(currentBlock.body,contentLang))}
                     title={isSpeaking?"Stop":"Listen"}
                     style={{background:"none",border:"2px solid var(--primary)",borderRadius:20,padding:"4px 10px",cursor:"pointer",color:"var(--primary)",fontSize:"0.8rem",fontWeight:600,marginLeft:8,flexShrink:0}}>
                     {isSpeaking?"⏹ Stop":"🔊 Listen"}
                   </button>
                 </div>
                 <p className={fk} style={{fontSize:"0.9rem",lineHeight:1.7,whiteSpace:"pre-wrap"}}>
-                  {currentBlock.body[lang as "kn"|"en"] ?? currentBlock.body.en}
+                  {pick(currentBlock.body,contentLang)}
                 </p>
                 <div className="flex gap-1 mt-3" style={{flexWrap:"wrap"}}>
                   {currentBlock.conceptTags.map(t=><span key={t} className="tag">{t}</span>)}
                 </div>
-                <div className="cb-source">📚 {currentBlock.source}</div>
+                <div className="cb-source">📚 {currentBlock.source} ({currentBlock.sourceId} · v{currentBlock.version})</div>
               </div>
             )}
             <div className="flex gap-2 mt-3">
@@ -383,26 +405,26 @@ function SessionContent() {
             <div className="flex items-center justify-between mb-3">
               <span className={`badge badge-sky ${fk}`}>📚 {L("ಶಿಕ್ಷಕ ಏಜೆಂಟ್","Tutor Agent","ट्यूटर एजेंट")}</span>
               <div className="flex items-center gap-2">
-                <span className={`badge ${adaptiveDifficulty(quizCorrect,quizTotal)==="hard"?"badge-red":adaptiveDifficulty(quizCorrect,quizTotal)==="easy"?"badge-green":"badge-amber"}`}>
-                  {adaptiveDifficulty(quizCorrect,quizTotal)}
+                <span className={`badge ${lvl==="hard"?"badge-red":lvl==="easy"?"badge-green":"badge-amber"}`}>
+                  {lvl}
                 </span>
                 <span className="text-xs text-muted">{currentQIdx+1}/{questions.length}</span>
               </div>
             </div>
             <div className="card-elevated mb-3">
               <div className="flex justify-between items-start mb-4">
-                <p className={`font-bold ${fk}`} style={{fontSize:"1rem",lineHeight:1.5,flex:1}}>{currentQ.question[lang as "kn"|"en"] ?? currentQ.question.en}</p>
-                <button onClick={()=>handleSpeak(currentQ.question[lang as "kn"|"en"]??currentQ.question.en)}
+                <p className={`font-bold ${fk}`} style={{fontSize:"1rem",lineHeight:1.5,flex:1}}>{pick(currentQ.question,contentLang)}</p>
+                <button onClick={()=>handleSpeak(pick(currentQ.question,contentLang)+". "+currentQ.options.map((o,j)=>`${String.fromCharCode(65+j)}. ${pick(o,contentLang)}`).join(". "))}
                   style={{background:"none",border:"2px solid var(--sky-600)",borderRadius:20,padding:"4px 10px",cursor:"pointer",color:"var(--sky-600)",fontSize:"0.78rem",fontWeight:600,marginLeft:8,flexShrink:0}}>
                   🔊
                 </button>
               </div>
               {currentQ.options.map((opt,i)=>(
                 <button id={`quiz-opt-${i}`} key={i}
-                  className={`quiz-option ${fk} ${selectedOption===null?"":(i===currentQ.correctIndex?"correct":selectedOption===i?"incorrect":"")}`}
+                  className={`quiz-option ${fk} ${selectedOption===i&&answerResult?(answerResult.correct?"correct":"incorrect"):""}`}
                   onClick={()=>handleAnswer(i)} disabled={selectedOption!==null}>
                   <span style={{marginRight:8,fontWeight:700}}>{String.fromCharCode(65+i)}.</span>
-                  {opt[lang as "kn"|"en"] ?? opt.en}
+                  {pick(opt,contentLang)}
                 </button>
               ))}
               {answerResult&&(
@@ -410,7 +432,17 @@ function SessionContent() {
                   <div className="font-bold mb-2" style={{color:answerResult.correct?"var(--green-800)":"var(--red-600)"}}>
                     {answerResult.correct?L("✅ ಸರಿಯಾಗಿದೆ!","✅ Correct!","✅ सही!"):L("❌ ತಪ್ಪಾಗಿದೆ","❌ Incorrect","❌ गलत")}
                   </div>
-                  <p style={{fontSize:"0.88rem",lineHeight:1.5}}>{answerResult.explanation[lang as "kn"|"en"] ?? answerResult.explanation.en}</p>
+                  <p style={{fontSize:"0.88rem",lineHeight:1.5}}>{pick(answerResult.explanation,contentLang)}</p>
+                  {answerResult.reinforcement.map(b=>(
+                    <div key={b.id} className="content-block mt-2" style={{fontSize:"0.85rem"}}>
+                      <div className="flex justify-between items-start">
+                        <strong className={fk}>📖 {pick(b.title,contentLang)}</strong>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>handleSpeak(pick(b.title,contentLang)+". "+pick(b.body,contentLang))}>🔊</button>
+                      </div>
+                      <p className={fk} style={{lineHeight:1.6,whiteSpace:"pre-wrap"}}>{pick(b.body,contentLang)}</p>
+                      <div className="cb-source">📚 {b.source}</div>
+                    </div>
+                  ))}
                   <button id="next-question-btn" className="btn btn-primary btn-sm mt-3" onClick={handleNext}>
                     {currentQIdx+1<questions.length?L("ಮುಂದಿನ ಪ್ರಶ್ನೆ →","Next Question →","अगला प्रश्न →"):L("ಸಾರಾಂಶ ನೋಡಿ →","View Summary →","सारांश देखें →")}
                   </button>
@@ -425,33 +457,42 @@ function SessionContent() {
           <div className="animate-slide">
             <div className="card-elevated mb-4">
               <div className="text-center mb-4">
-                <div style={{fontSize:"3rem",marginBottom:8}}>{summary.quizScore.pct>=80?"🌟":summary.quizScore.pct>=60?"👍":"📚"}</div>
+                <div style={{fontSize:"3rem",marginBottom:8}}>{summary.scorePercent>=80?"🌟":summary.scorePercent>=60?"👍":"📚"}</div>
                 <h2 className={`text-xl font-bold text-primary ${fk}`}>{L("ಅಧಿವೇಶನ ಪೂರ್ಣ!","Session Complete!","सत्र पूर्ण!")}</h2>
               </div>
               <div className="stat-grid mb-4">
-                <div className="stat-card"><div className="stat-val">{summary.quizScore.pct}%</div><div className={`stat-label ${fk}`}>{L("ರಸಪ್ರಶ್ನೆ ಅಂಕ","Quiz Score","प्रश्न स्कोर")}</div></div>
-                <div className="stat-card"><div className="stat-val">{summary.quizScore.correct}/{summary.quizScore.total}</div><div className={`stat-label ${fk}`}>{L("ಸರಿ ಉತ್ತರ","Correct","सही उत्तर")}</div></div>
-                <div className="stat-card"><div className="stat-val">{summary.topicsCovered.length}</div><div className={`stat-label ${fk}`}>{L("ವಿಷಯ","Topics","विषय")}</div></div>
-                <div className="stat-card"><div className="stat-val">{summary.totalContentBlocks}</div><div className={`stat-label ${fk}`}>{L("ಬ್ಲಾಕ್","Blocks","ब्लॉक")}</div></div>
+                <div className="stat-card"><div className="stat-val">{summary.scorePercent}%</div><div className={`stat-label ${fk}`}>{L("ರಸಪ್ರಶ್ನೆ ಅಂಕ","Quiz Score","प्रश्न स्कोर")}</div></div>
+                <div className="stat-card"><div className="stat-val">{Math.round(summary.scorePercent*summary.answered/100)}/{summary.answered}</div><div className={`stat-label ${fk}`}>{L("ಸರಿ ಉತ್ತರ","Correct","सही उत्तर")}</div></div>
+                <div className="stat-card"><div className="stat-val">{summary.covered.length}</div><div className={`stat-label ${fk}`}>{L("ವಿಷಯ","Topics","विषय")}</div></div>
+                <div className="stat-card"><div className="stat-val">{summary.covered.reduce((n,c)=>n+c.contentIds.length,0)}</div><div className={`stat-label ${fk}`}>{L("ಬ್ಲಾಕ್","Blocks","ब्लॉक")}</div></div>
               </div>
-              {summary.gaps.length>0&&(
+              {summary.remainingGaps.length>0&&(
                 <div className="mb-4">
                   <h4 className={`font-bold mb-2 text-sm ${fk}`} style={{color:"var(--amber-900)"}}>⚠️ {L("ಹೆಚ್ಚು ಗಮನ ಬೇಕಾದ ವಿಷಯ","Areas needing attention","ध्यान देने योग्य क्षेत्र")}</h4>
                   <div className="flex gap-1" style={{flexWrap:"wrap"}}>
-                    {summary.gaps.map(g=><span key={g.tag} className={`badge badge-amber ${fk}`}>{g.label[lang as "kn"|"en"]??g.label.en}</span>)}
+                    {summary.remainingGaps.map(g=><span key={g.conceptTag} className={`badge badge-amber ${fk}`}>{pick(g.label,contentLang)}</span>)}
                   </div>
                 </div>
               )}
-              {summary.followUpRecommendations.length>0&&(
+              {summary.remainingGaps.length>0&&(
                 <div className="mb-4">
                   <h4 className={`font-bold mb-2 text-sm text-primary ${fk}`}>📋 {L("ಮುಂದಿನ ಹೆಜ್ಜೆ","Follow-up tasks","अनुवर्ती कदम")}</h4>
                   <ul style={{paddingLeft:18,fontSize:"0.88rem",lineHeight:1.7}}>
-                    {summary.followUpRecommendations.map((r,i)=><li key={i} className={fk}>{r[lang as "kn"|"en"]??r.en}</li>)}
+                    {summary.remainingGaps.map(g=><li key={g.conceptTag} className={fk}>{pick(g.followUp,contentLang)}</li>)}
+                  </ul>
+                </div>
+              )}
+              {summary.referralTasks.length>0&&(
+                <div className="mb-4">
+                  <h4 className={`font-bold mb-2 text-sm ${fk}`} style={{color:"var(--red-600)"}}>🏥 {L("ರೆಫರಲ್ ಕಾರ್ಯಗಳು","Referral tasks","रेफरल कार्य")}</h4>
+                  <ul style={{paddingLeft:18,fontSize:"0.88rem",lineHeight:1.7}}>
+                    {summary.referralTasks.map(r=><li key={r.id}>{r.action} <span className="tag">{r.category}</span></li>)}
                   </ul>
                 </div>
               )}
               <div style={{background:"var(--neutral-100)",borderRadius:8,padding:"10px 14px",fontSize:"0.75rem",color:"var(--text-muted)"}}>
-                🤖 {summary.agentNote[lang as "kn"|"en"]??summary.agentNote.en}
+                🤖 {pick(summary.note,contentLang)}
+                {summary.sourcesCited.length>0&&<div className="mt-1">📚 {summary.sourcesCited.map(x=>x.name).join(" · ")}</div>}
               </div>
             </div>
             {/* Action buttons */}
@@ -465,14 +506,19 @@ function SessionContent() {
                 onClick={()=>{
                   const name=profile?.name??"ASHA Worker";
                   const t=session?.topic??"AMR";
-                  const mods=summary.topicsCovered.length.toString();
+                  const mods=summary.covered.length.toString();
                   const date=new Date().toISOString().split("T")[0];
-                  router.push(`/certificate?asha=${encodeURIComponent(name)}&topic=${encodeURIComponent(t)}&score=${summary.quizScore.pct}&modules=${mods}&date=${date}&lang=${lang}`);
+                  router.push(`/certificate?asha=${encodeURIComponent(name)}&topic=${encodeURIComponent(t)}&score=${summary.scorePercent}&modules=${mods}&date=${date}&lang=${lang}`);
                 }}>
                 🏅 {L("ಪ್ರಮಾಣಪತ್ರ","Certificate","प्रमाणपत्र")}
               </button>
               <button className="btn btn-outline" onClick={()=>router.push("/visits")}>{L("🏘️ ಭೇಟಿ ದಾಖಲಿಸಿ","🏘️ Log Visit","🏘️ दौरा लॉग करें")}</button>
             </div>
+          </div>
+        )}
+        {phase==="hold"&&(
+          <div className="card-elevated animate-slide">
+            <button id="finish-session-btn" className="btn btn-primary btn-full" onClick={finishSession}>{L("ಅಧಿವೇಶನ ಮುಗಿಸಿ →","Finish session →","सत्र समाप्त करें →")}</button>
           </div>
         )}
         <div ref={bottomRef}/>
