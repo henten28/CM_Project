@@ -75,15 +75,17 @@ export default function SettingsPage() {
             </span>
           </div>
           <p className={`text-sm text-muted mb-3 ${fk}`}>{L(
-            "ಎಲ್ಲಾ ಏಜೆಂಟ್‌ಗಳು ಬ್ಯಾಕೆಂಡ್‌ನಲ್ಲಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ. AWS ಕೀಗಳು ಸರ್ವರ್‌ನಲ್ಲಿ ಮಾತ್ರ ಇರುತ್ತವೆ, ಈ ಅಪ್‌ನಲ್ಲಿ ಎಂದಿಗೂ ನಮೂದಿಸಲಾಗುವುದಿಲ್ಲ.",
-            "All agents run on the AMR Jagruti backend. AWS credentials are configured on the server only and are never entered or stored in this app.",
-            "सभी एजेंट बैकएंड पर चलते हैं। AWS कुंजियां केवल सर्वर पर रहती हैं और इस ऐप में कभी दर्ज नहीं की जातीं।")}</p>
+            "ಎಲ್ಲಾ ಏಜೆಂಟ್‌ಗಳು ಬ್ಯಾಕೆಂಡ್‌ನಲ್ಲಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ. ಒದಗಿಸುವವರ ರುಜುವಾತುಗಳನ್ನು ಸರ್ವರ್‌ನಲ್ಲಿ ಮಾತ್ರ ಹೊಂದಿಸಿ; ಈ ಆಪ್‌ನಲ್ಲಿ ನಮೂದಿಸಬೇಡಿ.",
+            "All agents run on the AMR Jagruti backend. Configure provider credentials on the server only; never enter them in this app.",
+            "सभी एजेंट बैकएंड पर चलते हैं। प्रदाता के क्रेडेंशियल केवल सर्वर पर सेट करें; इस ऐप में कभी दर्ज न करें।")}</p>
 
           {up && (
             <div>
-              <div style={row}><span className="text-muted">{L("ಏಜೆಂಟ್ ಮೋಡ್", "Agent mode", "एजेंट मोड")}</span>
-                <strong>{health?.mock ? "🎭 Mock (no AWS credentials on server)" : "☁️ Amazon Bedrock"}</strong></div>
-              <div style={row}><span className="text-muted">{L("AWS ಪ್ರದೇಶ", "AWS region", "AWS क्षेत्र")}</span><strong id="aws-region">{health?.region ?? "—"}</strong></div>
+              <div style={row}><span className="text-muted">{L("ಒದಗಿಸುವವರು", "Provider", "प्रदाता")}</span>
+                <strong>{health?.provider === "bedrock" ? "Amazon Bedrock" : health?.provider === "openai" ? "OpenAI" : "—"}</strong></div>
+              <div style={row}><span className="text-muted">{L("ಸ್ಥಿತಿ", "Mode", "मोड")}</span>
+                <strong>{health?.mock ? "🎭 Mock mode" : health?.configured ? "Live configured" : "Not configured"}</strong></div>
+              {health?.provider === "bedrock" && <div style={row}><span className="text-muted">{L("AWS ಪ್ರದೇಶ", "AWS region", "AWS क्षेत्र")}</span><strong id="aws-region">{health.region ?? "—"}</strong></div>}
               <div style={{ ...row, borderBottom: "none" }}><span className="text-muted">{L("ಮಾದರಿ", "Model", "मॉडल")}</span>
                 <strong style={{ fontSize: "0.8rem", wordBreak: "break-all", textAlign: "right", marginLeft: 12 }}>{health?.model ?? "—"}</strong></div>
             </div>
@@ -103,11 +105,12 @@ export default function SettingsPage() {
         </div>
 
         <div className="card mb-4" style={{ fontSize: "0.82rem" }}>
-          <h4 className="font-bold mb-2" style={{ color: "var(--primary)" }}>💡 Changing the region or model</h4>
+          <h4 className="font-bold mb-2" style={{ color: "var(--primary)" }}>💡 Provider setup</h4>
           <ul style={{ paddingLeft: 16, lineHeight: 1.8, color: "var(--text-muted)" }}>
-            <li>Set <code>AWS_REGION</code> and <code>BEDROCK_MODEL</code> in <code>backend/.env</code>, then restart the backend</li>
-            <li>Credentials come from <code>aws configure</code>, <code>AWS_PROFILE</code> or an IAM role on the server</li>
-            <li>Without credentials the backend runs in mock mode with rule-based agents</li>
+            <li>Set <code>LLM_PROVIDER</code>, model and mock settings in <code>backend/.env</code>, then restart the backend.</li>
+            <li>For OpenAI, set <code>OPENAI_API_KEY</code> on the server. The key is never entered in this app. See <a href="https://developers.openai.com/api/docs/models/gpt-6-luna" target="_blank" rel="noreferrer">GPT-6 Luna model docs</a>.</li>
+            <li>For Bedrock, set <code>LLM_PROVIDER=bedrock</code>; credentials come from <code>aws configure</code>, <code>AWS_PROFILE</code> or an IAM role on the server. Set <code>AWS_REGION</code> there.</li>
+            <li>With the default auto mock mode and no OpenAI key, planning uses the local rule-based agent. Connected only confirms that the backend responds; it does not check provider access.</li>
           </ul>
         </div>
       </main>

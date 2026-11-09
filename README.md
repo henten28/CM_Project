@@ -6,20 +6,40 @@ AMR Jagruti is an education tool. It does not diagnose, prescribe, suggest doses
 
 ## Contents
 
-1. [How it works](#how-it-works)
-2. [Project structure](#project-structure)
-3. [First-time setup](#first-time-setup)
-4. [Running the app](#running-the-app)
-5. [Trying it out](#trying-it-out)
-6. [Using Amazon Bedrock](#using-amazon-bedrock)
-7. [API reference](#api-reference)
-8. [Safety controller](#safety-controller)
-9. [Database](#database)
-10. [Supervisor dashboard](#supervisor-dashboard)
-11. [Tests and evaluation](#tests-and-evaluation)
-12. [Adding content](#adding-content)
-13. [What has been built so far](#what-has-been-built-so-far)
-14. [Known limitations and next steps](#known-limitations-and-next-steps)
+1. [Quickstart](#quickstart)
+2. [How it works](#how-it-works)
+3. [Project structure](#project-structure)
+4. [First-time setup](#first-time-setup)
+5. [Running the app](#running-the-app)
+6. [Trying it out](#trying-it-out)
+7. [Using OpenAI](#using-openai)
+8. [Using Amazon Bedrock](#using-amazon-bedrock)
+9. [API reference](#api-reference)
+10. [Safety controller](#safety-controller)
+11. [Database](#database)
+12. [Supervisor dashboard](#supervisor-dashboard)
+13. [Tests and evaluation](#tests-and-evaluation)
+14. [Adding content](#adding-content)
+15. [What has been built so far](#what-has-been-built-so-far)
+16. [Known limitations and next steps](#known-limitations-and-next-steps)
+
+## Quickstart
+
+Requirements: Node.js 20+, Python 3.10+, and Git. The backend defaults to OpenAI with automatic mock mode: with no key, it uses the local rule-based planner; with a key, only the planning agent calls the model.
+
+```bash
+git clone https://github.com/henten28/CM_Project.git && cd CM_Project
+npm ci
+cd backend && python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+cd ..
+```
+
+To use OpenAI, set `OPENAI_API_KEY` in `backend/.env` on the server, then restart the backend. Never enter the key in the browser or commit `.env`. With `OPENAI_MOCK=auto`, a missing key selects mock mode; `OPENAI_MOCK=true` always uses mock mode, while `OPENAI_MOCK=false` requires a key. The default `OPENAI_MAX_TOKENS=1024` and `OPENAI_REASONING_EFFORT=none` keep requests bounded; the adapter does not retry requests automatically. Mock mode makes no model call.
+
+Start the backend and frontend in two terminals as described in [Running the app](#running-the-app). The Settings page's **Connected** status means the backend responds; it does not validate an OpenAI key or contact the provider. `/health` reports provider configuration and local mode only; it does not ping the provider. An optional live adapter check is `cd backend && python check_openai.py --force-live`; it makes one structured API request and may incur provider usage when explicitly run with a key.
 
 ## How it works
 
@@ -51,20 +71,20 @@ Next.js API routes  -- forward server-side -->  FastAPI backend (port 8000)
                                                    |- safety controller (rules only)
                                                    |- content/modules.json (versioned, reviewed)
                                                    |- SQLite database: sessions, referral tasks, audit log
-                                                   '- Amazon Bedrock (optional; mock mode without AWS keys)
+                                                   '- OpenAI planner (default; mock mode without a key), or Amazon Bedrock
 ```
 
-AWS credentials exist only on the backend server. The browser never sees them, and nothing sensitive is stored in localStorage.
+Provider credentials exist only on the backend server. The browser never sees them, and nothing sensitive is stored in localStorage.
 
 ## Project structure
 
 ```
-aws/
+CM_Project/
 |- app/                         Next.js pages (App Router)
 |  |- page.tsx                  home: hero, start a session, how it works, services, live figures, helplines
 |  |- learn/page.tsx            learning library: every approved lesson, filter, search, listen
 |  |- session/page.tsx          the session: plan review, lessons, quiz, summary, voice
-|  |- settings/page.tsx         backend connection status (region, model, mode)
+|  |- settings/page.tsx         backend connection status (provider, model, mode)
 |  |- dashboard/page.tsx        supervisor dashboard: sessions, referral tasks, evaluation results
 |  |- profile/ visits/ certificate/
 |  '- api/
@@ -99,7 +119,7 @@ aws/
    |  |- safety_controller.py
    |  |- content.py            loads the content repository
    |  '- models.py             Pydantic models for every agent input and output
-   |- services/bedrock.py      Bedrock Converse API wrapper with Pydantic-validated JSON output
+   |- services/                  OpenAI and Bedrock structured-output adapters
    |- content/modules.json     versioned content, quiz bank, source IDs, follow-up texts
    |- eval/                    evaluation scenarios, runner and latest report
    |- tests/                   pytest tests
@@ -118,14 +138,14 @@ aws/
 ### 1. Get the code
 
 ```bash
-git clone <repository-url> aws
-cd aws
+git clone https://github.com/henten28/CM_Project.git
+cd CM_Project
 ```
 
 ### 2. Install the frontend
 
 ```bash
-npm install
+npm ci
 ```
 
 ### 3. Install the backend
@@ -138,17 +158,15 @@ pip install -r requirements.txt
 cd ..
 ```
 
-### 4. Optional: environment file
+### 4. Configure the backend
 
-You can skip this step. Without it, the backend runs in **mock mode**, using rule-based agents and needing no AWS account.
-
-To change settings, copy the example file:
+Copy the example file and set `OPENAI_API_KEY` there if you want the planning agent to use OpenAI. With the default `OPENAI_MOCK=auto`, a missing key selects mock mode, which uses the local rule-based planner and needs no provider account.
 
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-The frontend reads one optional variable, `BACKEND_URL`, which defaults to `http://127.0.0.1:8000`. Set it in `.env.local` at the project root only if the backend runs somewhere else.
+Keep the key in `backend/.env`; the frontend never reads it. The frontend reads one optional variable, `BACKEND_URL`, which defaults to `http://127.0.0.1:8000`. Set it in `.env.local` at the project root only if the backend runs somewhere else.
 
 ## Running the app
 
@@ -180,7 +198,7 @@ Then open:
 
 To stop either server, press `Ctrl+C` in its terminal. If a port is already in use, an old server is still running; close it or choose another port.
 
-**After pulling new changes,** rerun `pip install -r requirements.txt` in `backend/` and `npm install` in the root, in case dependencies changed.
+**After pulling new changes,** rerun `pip install -r requirements.txt` in `backend/` and `npm ci` in the root, in case dependencies changed.
 
 ## Trying it out
 
@@ -210,19 +228,30 @@ A five-minute demo that covers every part of the system:
 9. **Open the supervisor dashboard** at http://localhost:3000/dashboard. Your session appears under History, and the referral tasks from step 4 are under Safety Log, where they can be marked done.
 10. **Check the audit log.** At http://localhost:8000/docs, call `GET /session/{session_id}` to see every agent handoff.
 
+## Using OpenAI
+
+OpenAI is the default optional planning provider. Only the planning agent uses the model; retrieval, tutor, summary and safety use approved content and deterministic rules. Planning output is schema-validated and checked against the approved content before use; invalid output falls back to the rule-based plan.
+
+1. Set `LLM_PROVIDER=openai` and `OPENAI_API_KEY` in `backend/.env`.
+2. Optionally set `OPENAI_MODEL` (default `gpt-6-luna`), `OPENAI_MAX_TOKENS` (default `1024`), `OPENAI_TIMEOUT_S` (default `60`), and `OPENAI_REASONING_EFFORT` (default `none`).
+3. Leave `OPENAI_MOCK=auto` to use mock mode when no key is configured; set it to `true` to always use mock mode, or `false` to require a key. Restart the backend after changing configuration.
+
+For a single live adapter check, run `cd backend && python check_openai.py --force-live` with a key configured. It sends one small structured request and may incur provider usage. The backend does not retry requests automatically. See the [GPT-6 Luna model documentation](https://developers.openai.com/api/docs/models/gpt-6-luna) for model details.
+
 ## Using Amazon Bedrock
 
-Without AWS credentials, the backend uses mock mode. To use Bedrock:
+To use Bedrock instead of the default OpenAI provider:
 
 1. Get access to a Bedrock model in your AWS account (for example Amazon Nova Pro).
-2. Give the backend credentials in the standard AWS way: `aws configure`, `AWS_PROFILE`, or an IAM role. Do not put keys in the frontend or in any `NEXT_PUBLIC_*` variable.
+2. Give the backend credentials in the standard AWS way: `aws configure`, `AWS_PROFILE`, or an IAM role. Do not put credentials in the frontend or in any `NEXT_PUBLIC_*` variable.
 3. In `backend/.env`, set:
    ```
+   LLM_PROVIDER=bedrock
    AWS_REGION=us-east-1
    BEDROCK_MODEL=nova-pro
    BEDROCK_MOCK=auto
    ```
-4. Restart the backend. The settings page should now show "Amazon Bedrock".
+4. Restart the backend. The Settings page reports the configured provider, model and (for Bedrock) region. Its Connected indicator only means the backend is reachable; it does not ping the provider.
 
 **Model aliases:**
 - `nova-pro` (default), `nova-lite`, `nova-micro`
@@ -248,7 +277,7 @@ The browser calls the Next.js routes on the left; they forward to the backend ro
 | `POST /api/session/step` | `POST /session/step` | `approve`, `answer`, `ask` or `resume` |
 | `POST /api/session/complete` | `POST /session/complete` | Produce the summary |
 | `GET /api/session/{id}` | `GET /session/{id}` | Full session record with audit log |
-| `GET /api/health` | `GET /health` | Backend status, mock mode, region, model |
+| `GET /api/health` | `GET /health` | Backend status, configured provider, mock mode, model and Bedrock region when relevant |
 | `GET /api/dashboard/sessions` | `GET /dashboard/sessions` | One summary row per session, newest first |
 | `GET /api/dashboard/tasks?status=open` | `GET /dashboard/tasks` | Referral tasks (`open`, `closed` or `all`) |
 | `POST /api/dashboard/tasks/{id}/close` | `POST /dashboard/tasks/{id}/close` | Mark a referral task done |
@@ -292,7 +321,7 @@ Resume after a page reload (returns the lesson content, unanswered questions and
 - `404`: unknown session
 - `409`: action not allowed in the current state (for example answering before approval)
 - `422`: invalid input
-- `502`: Bedrock error
+- `502`: configured provider request error
 - `503`: the frontend cannot reach the backend
 
 ## Safety controller
@@ -367,10 +396,10 @@ This runs the 30 predefined scenarios in `eval/scenarios.json` against a throwaw
 |---|---|---|
 | Session flow and branching | S01 to S08 | Full sessions across topics, durations, languages and answer patterns; the level after the quiz; gaps in the summary |
 | Safety routing | F01 to F13 | 10 medical questions in three languages routed to the right category, 3 teaching questions left alone |
-| Invalid AI output | A01 to A05 | Invented content, over-time plans, wrong modules and Bedrock errors fall back to the rule-based plan; a valid model plan is accepted |
+| Invalid AI output | A01 to A05 | Invented content, over-time plans, wrong modules and provider errors fall back to the rule-based plan; a valid model plan is accepted |
 | Persistence and state | P01 to P04 | Restart, resume, out-of-order requests, unsafe start topics |
 
-It reports the four metrics from the proposal: test pass rate, medical questions routed to the correct safety category, AI lesson plans passing validation, and full sessions completed without manual fixes. The AI plan metric needs Bedrock, so it shows "not measured" in mock mode. Run the evaluation again once AWS access is set up to measure it. The last run in mock mode passed all 30 scenarios.
+It reports the four metrics from the proposal: test pass rate, medical questions routed to the correct safety category, AI lesson plans passing validation, and full sessions completed without manual fixes. The AI plan metric requires a configured live provider, so it shows "not measured" in mock mode. Run the evaluation again with OpenAI or Bedrock configured to measure it. The last recorded mock-mode run passed all 30 scenarios.
 
 ### Browser tests (Playwright)
 
@@ -431,7 +460,7 @@ Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, N
   - It also deletes the old `amr_llm_config` entry from the browser, so previously typed keys are removed.
 - **Home page**: session lengths are now 5, 10 or 15 minutes to match the proposal, and earlier quiz gaps are sent to the planning agent.
 
-### Added before AWS access
+### Added before provider credentials were available
 
 - **SQLite database** with SQLAlchemy for sessions, referral tasks and the audit log (`backend/db.py`).
 - **Session resume:** reloading the page mid-session brings back the lessons, remaining questions and progress.
@@ -447,7 +476,7 @@ Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, N
 
 ## Known limitations and next steps
 
-- **No AWS access yet.** The backend runs in mock mode. Once access is set up, follow [Using Amazon Bedrock](#using-amazon-bedrock) and rerun the evaluation to measure the AI plan metric.
+- **Earlier evaluation state.** The latest recorded evaluation used mock mode. Configure either provider and rerun the evaluation to measure the AI plan metric.
 - **New interface text in Kannada and Hindi** (menus, headings, home page sections) was written for the redesign and should be checked by native speakers. Lesson content is unchanged.
 - **There is no reviewed Hindi content yet.** Hindi sessions show English lesson text, and the Hindi safety phrases and messages need native review.
 - **The content library is small** (15 blocks, 5 quiz questions). Adding reviewed material is the most useful next step; see [Adding content](#adding-content).

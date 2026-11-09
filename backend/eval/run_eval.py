@@ -1,8 +1,8 @@
 # Evaluation runner for the proposal's predefined scenarios and metrics.
 # Usage, from backend/:  python -m eval.run_eval            (writes eval/report.json and eval/report.md)
 #                        python -m eval.run_eval --no-write (print only)
-# Runs in mock mode without AWS credentials; with credentials the planning agent calls Bedrock,
-# which is what the "AI lesson plans that pass validation" metric measures.
+# Runs in mock mode without provider credentials; with credentials the planning agent calls the
+# configured model provider, which is what the "AI lesson plans that pass validation" metric measures.
 
 import argparse
 import json
@@ -31,6 +31,7 @@ def run() -> Dict[str, Any]:
     from fastapi.testclient import TestClient
 
     import db
+    import config
     import main as backend_main
     from agents import planning_agent, safety_controller
     from agents.content import repo
@@ -213,7 +214,7 @@ def run() -> Dict[str, Any]:
     }
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "mode": "mock" if bedrock.is_mock_mode() else "bedrock",
+        "mode": "mock" if bedrock.is_mock_mode() else config.LLM_PROVIDER,
         "model": bedrock.resolve_model() if not bedrock.is_mock_mode() else None,
         "contentVersion": repo().version,
         "metrics": metrics,

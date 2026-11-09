@@ -30,8 +30,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# environment files (only the blank backend example is tracked)
 .env*
+!backend/.env.example
+backend/.env
 
 # vercel
 .vercel
@@ -43,3 +45,12 @@ next-env.d.ts
 # python test and bytecode caches
 __pycache__/
 .pytest_cache/
+**/.venv/
+
+# local database files and SQLite journals
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*

@@ -48,6 +48,12 @@ def _client():
 
 @lru_cache(maxsize=1)
 def is_mock_mode() -> bool:
+    provider = config.LLM_PROVIDER
+    if provider == "openai":
+        from services import openai_client
+        return openai_client.is_mock_mode()
+    if provider != "bedrock":
+        raise BedrockError("LLM_PROVIDER must be openai or bedrock")
     if config.BEDROCK_MOCK in ("1", "true", "yes"):
         return True
     if config.BEDROCK_MOCK in ("0", "false", "no"):
@@ -59,6 +65,10 @@ def is_mock_mode() -> bool:
 
 
 def resolve_model(model: Optional[str] = None) -> str:
+    if config.LLM_PROVIDER == "openai":
+        return model or config.OPENAI_MODEL
+    if config.LLM_PROVIDER != "bedrock":
+        raise BedrockError("LLM_PROVIDER must be openai or bedrock")
     name = model or config.BEDROCK_MODEL
     if name not in MODEL_ALIASES:
         return name  # already a full model id or inference profile id
@@ -120,6 +130,15 @@ async def converse(
     temperature: float = 0.3,
     mock_text: str = "[mock] Bedrock is in mock mode.",
 ) -> str:
+    if config.LLM_PROVIDER == "openai":
+        from services import openai_client
+        try:
+            return await openai_client.converse(
+                prompt, system=system, model=model, max_tokens=max_tokens,
+                temperature=temperature, mock_text=mock_text,
+            )
+        except RuntimeError as e:
+            raise BedrockError(str(e)) from e
     if is_mock_mode():
         return mock_text
 
@@ -145,6 +164,15 @@ async def generate_structured(
     mock: Union[None, Dict[str, Any], Callable[[], Dict[str, Any]]] = None,
     max_repairs: int = 1,
 ) -> T:
+    if config.LLM_PROVIDER == "openai":
+        from services import openai_client
+        try:
+            return await openai_client.generate_structured(
+                prompt, schema, system=system, model=model, max_tokens=max_tokens,
+                temperature=temperature, mock=mock, max_repairs=max_repairs,
+            )
+        except RuntimeError as e:
+            raise BedrockError(str(e)) from e
     if is_mock_mode():
         if mock is None:
             raise BedrockError(f"mock mode is on but no mock was given for {schema.__name__}")
@@ -199,4 +227,18 @@ async def generate_structured(
 
 def status() -> Dict[str, Any]:
     # safe to expose: never includes credentials
-    return {"mock": is_mock_mode(), "region": config.AWS_REGION, "model": resolve_model()}
+    if config.LLM_PROVIDER == "openai":
+        from services import openai_client
+        return {
+            "provider": "openai",
+            "mock": openai_client.is_mock_mode(),
+            "model": resolve_model(),
+            "configured": bool(config.OPENAI_API_KEY),
+        }
+    if config.LLM_PROVIDER != "bedrock":
+        raise BedrockError("LLM_PROVIDER must be openai or bedrock")
+    return {
+        "provider": "bedrock", "mock": is_mock_mode(),
+        "region": config.AWS_REGION, "model": resolve_model(),
+        "configured": not is_mock_mode(),
+    }

@@ -104,7 +104,16 @@ export interface SessionRecord {
   summary: SessionSummary | null;
 }
 
-export interface Health { ok: boolean; reachable: boolean; mock?: boolean; region?: string; model?: string; error?: string; }
+export interface Health {
+  ok: boolean;
+  reachable: boolean;
+  provider?: "openai" | "bedrock";
+  mock?: boolean;
+  configured?: boolean;
+  region?: string;
+  model?: string;
+  error?: string;
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -182,7 +191,7 @@ export interface ReferralTask extends EscalationTask { sessionId: string; topic:
 export interface Metric { numerator: number; denominator: number; percent: number | null; }
 
 export interface EvaluationReport {
-  generatedAt: string; mode: "mock" | "bedrock"; model: string | null; contentVersion: string;
+  generatedAt: string; mode: "mock" | "openai" | "bedrock"; model: string | null; contentVersion: string;
   metrics: { testPassRate: Metric; safetyRoutingAccuracy: Metric; safetyFalsePositives: Metric;
              aiPlansPassingValidation: Metric; fullSessionsCompleted: Metric };
   scenarios: { id: string; type: string; title: string; passed: boolean; detail: string }[];
