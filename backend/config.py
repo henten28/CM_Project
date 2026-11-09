@@ -19,6 +19,14 @@ OPENAI_TIMEOUT_S = int(os.getenv("OPENAI_TIMEOUT_S", "60"))
 OPENAI_MOCK = os.getenv("OPENAI_MOCK", "auto").strip().lower()
 OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "none").strip().lower()
 
+AGENT_TURN_MAX_CALLS = int(os.getenv("AGENT_TURN_MAX_CALLS", "4"))
+AGENT_SESSION_MAX_CALLS = int(os.getenv("AGENT_SESSION_MAX_CALLS", "24"))
+AGENT_MAX_OUTPUT_TOKENS = int(os.getenv("AGENT_MAX_OUTPUT_TOKENS", "1800"))
+AGENT_TIMEOUT_S = int(os.getenv("AGENT_TIMEOUT_S", "20"))
+
+QUIZ_MAX_OUTPUT_TOKENS = int(os.getenv("QUIZ_MAX_OUTPUT_TOKENS", "4000"))
+QUIZ_MAX_QUESTIONS = int(os.getenv("QUIZ_MAX_QUESTIONS", "10"))
+
 # model alias (see services/bedrock.py MODEL_ALIASES) or a full Bedrock model / inference profile id
 BEDROCK_MODEL = os.getenv("BEDROCK_MODEL", "nova-pro")
 

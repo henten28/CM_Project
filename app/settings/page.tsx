@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { getHealth, type Health } from "@/lib/api-client";
 import { useLang, useTextSize, tr, type Lang } from "@/lib/prefs";
@@ -38,6 +39,12 @@ export default function SettingsPage() {
       <PageBanner img="/img/step1.svg" title={L("ಸೆಟ್ಟಿಂಗ್ಸ್", "Settings", "सेटिंग्स")}
         sub={L("ಭಾಷೆ, ಅಕ್ಷರ ಗಾತ್ರ ಮತ್ತು ಬ್ಯಾಕೆಂಡ್ ಸಂಪರ್ಕ.", "Language, text size and the backend connection.", "भाषा, अक्षर आकार और बैकएंड कनेक्शन।")} />
       <main className="page-body" style={{ maxWidth: 760 }}>
+
+        <div className="card mb-4" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Link className="btn btn-primary" href="/quiz-builder">Prepare and review quiz batches →</Link>
+          <Link className="btn btn-outline" href="/quiz">Browse published quizzes →</Link>
+          <Link className="btn btn-outline" href="/agent-session">Optional agent-led learning sessions →</Link>
+        </div>
 
         {/* Display preferences: saved in this browser and used on every page */}
         <div className="card-elevated mb-4">

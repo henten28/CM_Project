@@ -1,0 +1,14 @@
+{
+  "documents": [
+    {
+      "id": "my-amr-guide",
+      "title": "My reviewed AMR guide",
+      "url": "https://example.org/amr-guide",
+      "file": "my-amr-guide.pdf",
+      "approved": false,
+      "provenance": "approved-local-document",
+      "publisher": "Example publisher",
+      "origin": "Downloaded from the publisher's website"
+    }
+  ]
+}

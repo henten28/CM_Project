@@ -1,0 +1,14 @@
+{
+  "documents": [
+    {
+      "id": "cdc-amr-basics",
+      "title": "CDC — About Antimicrobial Resistance (selected excerpts)",
+      "publisher": "U.S. Centers for Disease Control and Prevention",
+      "url": "https://www.cdc.gov/antimicrobial-resistance/about/",
+      "file": "cdc-amr-basics.md",
+      "approved": true,
+      "provenance": "official-source-excerpt",
+      "origin": "Selected passages checked against the official CDC page on 2026-11-10. Source admission for this demo is separate from ASHA approval of generated activities."
+    }
+  ]
+}

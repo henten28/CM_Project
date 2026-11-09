@@ -47,6 +47,12 @@ __pycache__/
 .pytest_cache/
 **/.venv/
 
+# Local knowledge corpus (curated seed files are explicitly tracked below)
+backend/knowledge/sources.json
+backend/knowledge/documents/*
+!backend/knowledge/documents/.gitkeep
+!backend/knowledge/documents/cdc-amr-basics.md
+
 # local database files and SQLite journals
 *.db
 *.db-*

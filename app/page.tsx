@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getProfile, type AshaProfile } from "@/lib/profile-store";
 import { getDueReviews } from "@/lib/spaced-repetition";
-import { startSession, getDashboardSessions, getContentLibrary } from "@/lib/api-client";
+import { getDashboardSessions, getContentLibrary } from "@/lib/api-client";
 import { useLang, tr } from "@/lib/prefs";
 import { SiteHeader, SiteFooter, KeyMessageTicker } from "@/components/SiteChrome";
 
@@ -16,12 +16,12 @@ const T = {
     heroSub: "ಕನ್ನಡದಲ್ಲಿ AMR ಶಿಕ್ಷಣ — ASHA ಕಾರ್ಯಕರ್ತೆಯರಿಗಾಗಿ ರಚಿಸಿದ ಸಂವಾದಾತ್ಮಕ ಅಧ್ಯಯನ ಅಪ್",
     roleSelect: "ನಿಮ್ಮ ಪಾತ್ರ ಆಯ್ಕೆ ಮಾಡಿ",
     asha: "ASHA ಕಾರ್ಯಕರ್ತೆ",
-    ashaDesc: "ಸಮುದಾಯ AMR ಶಿಕ್ಷಣ ಅಧಿವೇಶನ ನಡೆಸಿ",
+    ashaDesc: "ಮರುಬಳಕೆ ಮಾಡಬಹುದಾದ AMR ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ ಮತ್ತು ಪರಿಶೀಲಿಸಿ",
     supervisor: "ಮೇಲ್ವಿಚಾರಕ",
     supervisorDesc: "ಅಧಿವೇಶನ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ಮತ್ತು ಅಂಕಿ-ಅಂಶ ವೀಕ್ಷಿಸಿ",
-    topicLabel: "ಇಂದಿನ ಶಿಕ್ಷಣ ವಿಷಯ",
-    time: "ಲಭ್ಯ ಸಮಯ (ನಿಮಿಷ)",
-    start: "ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ →",
+    topicLabel: "ಇಂದಿನ ರಸಪ್ರಶ್ನೆ ವಿಷಯ",
+    time: "ಪ್ರಶ್ನೆಗಳ ಸಂಖ್ಯೆ",
+    start: "ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ →",
     dashboard: "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ತೆರೆಯಿರಿ →",
     disclaimer: "⚕️ ಈ ಅಪ್ ಶಿಕ್ಷಣ ಸಾಧನ ಮಾತ್ರ. ಔಷಧ ಸೂಚಿಸಲ್ಲ, ರೋಗ ನಿರ್ಣಯ ಮಾಡಲ್ಲ.",
     profile: "ಪ್ರೊಫೈಲ್",
@@ -40,7 +40,7 @@ const T = {
       { value: "sharing", label: "ಔಷಧ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ" },
       { value: "case study", label: "ಕೇಸ್ ಸ್ಟಡಿ" },
     ],
-    times: ["5","10","15"],
+    times: ["3","5","7","10"],
     powered: "ಬಹು-ಏಜೆಂಟ್ AI • ಕನ್ನಡ-ಮೊದಲ • NCDC ಮೂಲ",
   },
   en: {
@@ -49,12 +49,12 @@ const T = {
     heroSub: "A multi-agent, Kannada-first app helping ASHA workers run interactive AMR education sessions",
     roleSelect: "Select your role",
     asha: "ASHA Worker",
-    ashaDesc: "Run a community AMR education session",
+    ashaDesc: "Prepare and review a reusable AMR quiz",
     supervisor: "Supervisor",
     supervisorDesc: "View session dashboard and metrics",
-    topicLabel: "Today's session topic",
-    time: "Available time (minutes)",
-    start: "Start Session →",
+    topicLabel: "Today's quiz topic",
+    time: "Number of questions",
+    start: "Build Quiz →",
     dashboard: "Open Dashboard →",
     disclaimer: "⚕️ This app is an education tool only. It does not diagnose, prescribe, or suggest medicines.",
     profile: "Profile",
@@ -73,7 +73,7 @@ const T = {
       { value: "sharing", label: "Don't share medicines" },
       { value: "case study", label: "Case Studies" },
     ],
-    times: ["5","10","15"],
+    times: ["3","5","7","10"],
     powered: "Multi-agent AI • Kannada-first • NCDC-sourced",
   },
   hi: {
@@ -82,12 +82,12 @@ const T = {
     heroSub: "ASHA कार्यकर्ताओं के लिए एक बहु-एजेंट, कन्नड़-प्रथम AMR शिक्षा ऐप",
     roleSelect: "अपनी भूमिका चुनें",
     asha: "ASHA कार्यकर्ता",
-    ashaDesc: "समुदाय AMR शिक्षा सत्र चलाएं",
+    ashaDesc: "दोबारा उपयोग योग्य AMR प्रश्नोत्तरी तैयार करें और जांचें",
     supervisor: "पर्यवेक्षक",
     supervisorDesc: "सत्र डैशबोर्ड और मेट्रिक्स देखें",
-    topicLabel: "आज का सत्र विषय",
-    time: "उपलब्ध समय (मिनट)",
-    start: "सत्र शुरू करें →",
+    topicLabel: "आज की प्रश्नोत्तरी का विषय",
+    time: "प्रश्नों की संख्या",
+    start: "प्रश्नोत्तरी बनाएं →",
     dashboard: "डैशबोर्ड खोलें →",
     disclaimer: "⚕️ यह ऐप केवल एक शिक्षा उपकरण है। यह दवाएं नहीं लिखता या निदान नहीं करता।",
     profile: "प्रोफ़ाइल",
@@ -106,7 +106,7 @@ const T = {
       { value: "sharing", label: "दवाएं साझा न करें" },
       { value: "case study", label: "केस अध्ययन" },
     ],
-    times: ["5","10","15"],
+    times: ["3","5","7","10"],
     powered: "बहु-एजेंट AI • कन्नड़-प्रथम • NCDC स्रोत",
   },
 };
@@ -120,7 +120,7 @@ const TOPIC_IMG: Record<string, string> = {
 export default function LandingPage() {
   const [lang] = useLang();  // shared, saved preference; changed from the header
   const [topic, setTopic] = useState("general");
-  const [minutes, setMinutes] = useState("10");
+  const [questionCount, setQuestionCount] = useState("5");
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<AshaProfile | null>(null);
   const [dueReviews, setDueReviews] = useState<{ tag: string; label: Record<string,string> }[]>([]);
@@ -148,16 +148,9 @@ export default function LandingPage() {
     }).catch(() => setStats(null));
   }, []);
 
-  async function handleStart() {
+  function handleStart() {
     setLoading(true);
-    try {
-      // spaced-repetition gaps go to the planning agent as prior gaps
-      const data = await startSession({ topic, durationMinutes: Number(minutes) as 5 | 10 | 15, lang,
-                                        priorGaps: dueReviews.map((r) => r.tag) });
-      router.push(`/session?id=${data.sessionId}`);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not reach the backend");
-    } finally { setLoading(false); }
+    router.push(`/quiz-builder?topic=${encodeURIComponent(topic)}&lang=${lang}&questionCount=${questionCount}`);
   }
 
   const badges = [
@@ -168,27 +161,29 @@ export default function LandingPage() {
   ];
 
   const steps = [
-    { c: "#6a4c93", img: "/img/step1.svg", title: L("ಯೋಜನಾ ಏಜೆಂಟ್", "Planning agent", "योजना एजेंट"),
-      text: L("ಹಿಂದಿನ ಕೊರತೆಗಳಿಂದ ಆರಂಭಿಸಿ, 5, 10 ಅಥವಾ 15 ನಿಮಿಷಕ್ಕೆ ಹೊಂದುವ ಅನುಮೋದಿತ ಪಾಠಗಳನ್ನು ಆಯ್ಕೆ ಮಾಡುತ್ತದೆ.",
-              "Picks approved lessons that fit 5, 10 or 15 minutes, starting with earlier gaps.",
-              "पिछली कमियों से शुरू करके 5, 10 या 15 मिनट में फिट होने वाले स्वीकृत पाठ चुनता है।") },
-    { c: "#e07a2f", img: "/img/step2.svg", title: L("ASHA ಅನುಮೋದನೆ", "ASHA approves", "ASHA अनुमोदन"),
-      text: L("ಕಲಿಸುವ ಮೊದಲು ASHA ಕಾರ್ಯಕರ್ತೆ ಯೋಜನೆಯನ್ನು ಪರಿಶೀಲಿಸುತ್ತಾರೆ.",
-              "The ASHA worker reviews the plan before anything is taught.",
-              "ASHA कार्यकर्ता पढ़ाने से पहले योजना की जांच करती हैं।") },
-    { c: "#1d3557", img: "/img/step3.svg", title: L("ಕಲಿಕೆ ಮತ್ತು ರಸಪ್ರಶ್ನೆ", "Learn and quiz", "सीखें और प्रश्नोत्तरी"),
-      text: L("ಪಾಠಗಳನ್ನು ಓದಿ ಕೇಳಿಸಲಾಗುತ್ತದೆ; ರಸಪ್ರಶ್ನೆ ಅಂಕಕ್ಕೆ ಹೊಂದಿಕೊಳ್ಳುತ್ತದೆ.",
-              "Lessons are read aloud and the quiz adapts to the score.",
-              "पाठ पढ़कर सुनाए जाते हैं और प्रश्नोत्तरी स्कोर के अनुसार बदलती है।") },
-    { c: "#2d6a4f", img: "/img/step4.svg", title: L("ಸಾರಾಂಶ", "Summary", "सारांश"),
-      text: L("ಕೊರತೆಗಳು, ಮುಂದಿನ ಕಾರ್ಯಗಳು ಮತ್ತು ರೆಫರಲ್‌ಗಳನ್ನು ಮೇಲ್ವಿಚಾರಕರಿಗಾಗಿ ಉಳಿಸಲಾಗುತ್ತದೆ.",
-              "Gaps, follow-up tasks and referrals are saved for the supervisor.",
-              "कमियां, अगले कार्य और रेफरल पर्यवेक्षक के लिए सहेजे जाते हैं।") },
+    { c: "#6a4c93", img: "/img/step1.svg", title: L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare a quiz", "प्रश्नोत्तरी तैयार करें"),
+      text: L("ಆಯ್ದ ವಿಷಯಕ್ಕೆ ಮೂಲಗಳ ಆಧಾರದ ಮೇಲೆ ಪ್ರಶ್ನೆಗಳ ಬ್ಯಾಚ್ ರಚಿಸಿ.",
+              "Generate a source-grounded batch of questions for the selected topic.",
+              "चुने हुए विषय के लिए स्रोत-आधारित प्रश्नों का सेट बनाएं।") },
+    { c: "#e07a2f", img: "/img/step2.svg", title: L("ASHA ಪರಿಶೀಲನೆ", "ASHA reviews", "ASHA समीक्षा"),
+      text: L("ಪ್ರಕಟಿಸುವ ಮೊದಲು ಎಲ್ಲಾ ಪ್ರಶ್ನೆಗಳು, ಉತ್ತರಗಳು ಮತ್ತು ವಿವರಣೆಗಳನ್ನು ಒಟ್ಟಿಗೆ ಪರಿಶೀಲಿಸಿ.",
+              "Review all questions, answer keys and explanations together before publishing.",
+              "प्रकाशित करने से पहले सभी प्रश्न, उत्तर और व्याख्या एक साथ जांचें।") },
+    { c: "#1d3557", img: "/img/step3.svg", title: L("ಪ್ರಕಟಿಸಿ", "Publish a version", "संस्करण प्रकाशित करें"),
+      text: L("ಅನುಮೋದಿತ ರಸಪ್ರಶ್ನೆ ಮರುಬಳಕೆಗಾಗಿ ಆವೃತ್ತಿಯಾಗಿ ಉಳಿಯುತ್ತದೆ.",
+              "The approved quiz is saved as a reusable published version.",
+              "स्वीकृत प्रश्नोत्तरी दोबारा उपयोग के लिए प्रकाशित संस्करण के रूप में सहेजी जाती है।") },
+    { c: "#2d6a4f", img: "/img/step4.svg", title: L("ಕಲಿಯುವವರ ಪ್ರಯತ್ನ", "Learner attempt", "सीखने वाले का प्रयास"),
+      text: L("ಕಲಿಯುವವರು ಎಲ್ಲಾ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸುತ್ತಾರೆ; ಸರ್ವರ್ ಅಂಕ ಮತ್ತು ವಿವರಣೆಗಳನ್ನು ತೋರಿಸುತ್ತದೆ.",
+              "Learners answer the full set; the server grades it and shows explanations.",
+              "सीखने वाले सभी प्रश्नों के उत्तर देते हैं; सर्वर जांचकर व्याख्या दिखाता है।") },
   ];
 
   const services = [
-    { href: "/#start", img: "/img/step3.svg", title: L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ", "Start a session", "सत्र शुरू करें"),
-      text: L("ಮನೆ ಭೇಟಿಯ ವೇಳೆ ಚಿಕ್ಕ AMR ಪಾಠ ನಡೆಸಿ.", "Run a short AMR lesson during a home visit.", "घर के दौरे में छोटा AMR पाठ चलाएं।") },
+    { href: "/#start", img: "/img/step3.svg", title: L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare a quiz", "प्रश्नोत्तरी तैयार करें"),
+      text: L("ಪ್ರಶ್ನೆಗಳ ಸಂಪೂರ್ಣ ಬ್ಯಾಚ್ ಪರಿಶೀಲಿಸಿ ಪ್ರಕಟಿಸಿ.", "Review the full question batch and publish it for reuse.", "सभी प्रश्नों की समीक्षा करके पुनः उपयोग के लिए प्रकाशित करें।") },
+    { href: "/quiz", img: "/img/m7.svg", title: L("ಪ್ರಕಟಿತ ರಸಪ್ರಶ್ನೆಗಳು", "Published quizzes", "प्रकाशित प्रश्नोत्तरी"),
+      text: L("ಪ್ರಕಟಿತ ಆವೃತ್ತಿಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸಿ.", "Choose a published version and attempt every question.", "प्रकाशित संस्करण चुनें और सभी प्रश्नों के उत्तर दें।") },
     { href: "/learn", img: "/img/m7.svg", title: L("ಕಲಿಕಾ ಗ್ರಂಥಾಲಯ", "Learning library", "सीखने की लाइब्रेरी"),
       text: L("ಎಲ್ಲಾ ಅನುಮೋದಿತ ಪಾಠಗಳನ್ನು ನೋಡಿ ಮತ್ತು ಕೇಳಿ.", "Browse every approved lesson and listen to it.", "सभी स्वीकृत पाठ देखें और सुनें।") },
     { href: "/visits", img: "/img/m5.svg", title: L("ಮನೆ ಭೇಟಿ", "Household visits", "घर दौरे"),
@@ -214,6 +209,7 @@ export default function LandingPage() {
               <div className="hero2-cta">
                 <a href="#start" className={`btn btn-primary btn-lg ${fk}`}>{t.start}</a>
                 <Link href="/learn" className={`btn btn-outline btn-lg ${fk}`}>📚 {L("ಕಲಿಕಾ ಗ್ರಂಥಾಲಯ", "Learning library", "सीखने की लाइब्रेरी")}</Link>
+                <Link href="/quiz" className={`btn btn-outline btn-lg ${fk}`}>✅ {L("ಪ್ರಕಟಿತ ರಸಪ್ರಶ್ನೆಗಳು", "Published quizzes", "प्रकाशित प्रश्नोत्तरी")}</Link>
               </div>
             </div>
             <div className="hero-art">
@@ -226,10 +222,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Start a session */}
+        {/* Prepare a reusable quiz */}
         <section id="start" className="section">
           <div className="wrap">
-            <h2 className={`section-title ${fk}`}>{L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ", "Start a session", "सत्र शुरू करें")}</h2>
+            <h2 className={`section-title ${fk}`}>{L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare a quiz", "प्रश्नोत्तरी तैयार करें")}</h2>
             <p className={`section-sub ${fk}`}>{t.ashaDesc}</p>
             <div className="start-panel">
               <div className="card-elevated">
@@ -246,10 +242,10 @@ export default function LandingPage() {
                 <label className={`block text-sm font-bold mt-4 mb-2 ${fk}`} style={{ color: "var(--primary)" }}>{t.time}</label>
                 <div className="flex gap-2">
                   {t.times.map((m) => (
-                    <button key={m} id={`time-${m}`} className={`time-btn ${minutes === m ? "on" : ""}`} onClick={() => setMinutes(m)}>{m}</button>
+                    <button key={m} id={`count-${m}`} aria-pressed={questionCount === m} className={`time-btn ${questionCount === m ? "on" : ""}`} onClick={() => setQuestionCount(m)}>{m}</button>
                   ))}
                 </div>
-                <button id="start-session-btn" className={`btn btn-primary btn-full btn-lg mt-4 ${fk}`} onClick={handleStart} disabled={loading}>
+                <button id="start-quiz-btn" className={`btn btn-primary btn-full btn-lg mt-4 ${fk}`} onClick={handleStart} disabled={loading}>
                   {loading ? <span className="spinner" /> : t.start}
                 </button>
               </div>

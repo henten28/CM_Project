@@ -25,7 +25,7 @@ AMR Jagruti is an education tool. It does not diagnose, prescribe, suggest doses
 
 ## Quickstart
 
-Requirements: Node.js 20+, Python 3.10+, and Git. The default demo needs no AWS credentials or Bedrock packages. With an OpenAI key, only the planner calls OpenAI; retrieval, tutor, summary and safety use approved content and deterministic rules. Without an OpenAI key, the planner uses local mock mode.
+Requirements: Node.js 20+, Python 3.10+, and Git. The default demo needs only an OpenAI API key, with no AWS credentials or Bedrock packages. The default workflow prepares a full source-grounded quiz, then publishes it after one ASHA review. Learners attempt an approved version without model calls or further review interruptions. Earlier saved sessions and the original rule-based workflow remain available through the legacy session endpoints.
 
 ```bash
 git clone https://github.com/henten28/CM_Project.git && cd CM_Project
@@ -37,13 +37,55 @@ cp .env.example .env
 cd ..
 ```
 
-To use OpenAI, set `OPENAI_API_KEY` in `backend/.env` on the server, then restart the backend. Never enter the key in the browser or commit `.env`. With `OPENAI_MOCK=auto`, a missing key selects mock mode; `OPENAI_MOCK=true` always uses mock mode, while `OPENAI_MOCK=false` requires a key. The default `OPENAI_MAX_TOKENS=1024` and `OPENAI_REASONING_EFFORT=none` keep requests bounded; the adapter does not retry requests automatically. Mock mode makes no model call.
+To use OpenAI, set `OPENAI_API_KEY` in `backend/.env` on the server, then restart the backend. Never enter the key in the browser or commit `.env`. For new LLM-driven sessions, a missing key or forced mock mode stops generation with a clear message; the app does not pretend that a local fallback is an LLM call. `OPENAI_MODEL=gpt-6-luna` and `OPENAI_REASONING_EFFORT=none` are the low-cost defaults. Requests are bounded and are not automatically retried. The original legacy planner still supports automatic mock mode when no key is present.
 
 Start the backend and frontend in two terminals as described in [Running the app](#running-the-app). The Settings page's **Connected** status means the backend responds; it does not validate an OpenAI key or contact the provider. `/health` reports provider configuration and local mode only; it does not ping the provider. An optional live adapter check is `cd backend && python check_openai.py --force-live`; it makes one structured API request and may incur provider usage when explicitly run with a key.
 
+## Batch quiz review and learner attempts
+
+Open `/quiz-builder` as the ASHA reviewer. Choose the topic, language, difficulty and question count (five by default). The authoring agent searches the local document corpus and proposes the complete quiz, with an answer key, explanation and cited passage for every question. All questions appear together for review.
+
+Correct or regenerate individual questions, or regenerate the whole quiz. Saving an edit updates the draft only. After checking the questions, keys, explanations and supporting passages, choose **Approve all and publish** once. The resulting learner link opens `/quiz?id=...&version=...`; `/quiz` lists the latest published quizzes. Publishing adds a quiz to this local app's catalogue; it does not deploy the website or publish code to GitHub.
+
+Anyone who can reach the running website can attempt a published quiz. Each attempt has its own ID and is pinned to the published version it started with. All questions can be answered and submitted without ASHA intervention or OpenAI requests. Scoring uses the approved answer key on the server. Keys and explanations are excluded from public quiz and unfinished-attempt responses; feedback, explanations and source citations are returned after submission. Reloading an attempt restores it without regenerating questions.
+
+Drafts, published versions and attempts are stored in the local `backend/quiz_bank.db` file, which is ignored by Git. Sharing the code alone does not share your quiz catalogue; each fresh checkout can prepare its own quizzes using its backend key.
+
+Published versions are immutable. Editing a published quiz creates pending changes in its draft; learners continue to see the previous approved version until ASHA approves and publishes a new one. Attempts already in progress keep their original version. Draft edits, regeneration and publication use a revision check so stale review pages cannot overwrite newer changes. Repeating the same completed submission returns its saved result; a conflicting resubmission is rejected.
+
+The OpenAI key is needed for quiz generation and regeneration only. Editing, publication, browsing published quizzes, attempts and server-side scoring do not call the model. The authoring trace shows request prompts, source searches, proposal tool calls and token usage. Luna remains the default, with the existing bounded call limits; `QUIZ_MAX_OUTPUT_TOKENS=4000` permits a complete concise batch and `QUIZ_MAX_QUESTIONS=10` caps its size.
+
+The builder is an unauthenticated reviewer surface in this local prototype. Learner routes hide drafts and answer keys, but separate authenticated ASHA access is required before exposing reviewer tools in a production deployment. Learners do not need their own OpenAI key. To share with other devices, host the same frontend and backend where those devices can reach them; a `localhost` link only works on the machine running the app.
+
+The included CDC source and the document-addition instructions below apply to quiz generation. Source admission is separate from ASHA review: exact quote checks confirm that a passage exists, while the reviewer checks that it actually supports the answer. Broader source collection and a reusable, clinically reviewed question bank remain follow-up content work.
+
+## LLM-driven sessions with ASHA review
+
+The earlier step-by-step experiment remains available at `/agent-session`, where you can start or resume a session. The home page now leads to batch quiz preparation instead. The original supervisor dashboard statistics describe legacy sessions; the new session list and per-session trace are separate. Luna calls local tools to retrieve document passages and propose the next activity. It can choose lessons, quizzes, reinforcement, answers and a summary based on the recorded session and learner responses. The app executes tools and returns their results to the model, continuing until it has a proposal for human review.
+
+Every generated activity pauses for **ASHA review**. The review screen shows the draft, cited source passages, and (for a quiz) the proposed answer key and explanation. ASHA can approve or request revision. Only approved activities appear in the learner view. Quiz answers are scored against the ASHA-approved key; after the learner responds, the model decides what to do next. A summary also requires approval before completion. Fixed safety checks still override medical-advice requests; model output cannot bypass those checks.
+
+The review and learner views share a browser in this prototype. They are **not separate authenticated accounts**. An authenticated reviewer role is required before use where learners must be prevented from accessing the review tools. Local session records persist across reloads and backend restarts.
+
+### Adding documents later
+
+A starter source is included: selected passages from the [CDC AMR overview](https://www.cdc.gov/antimicrobial-resistance/about/), stored in `backend/knowledge/documents/cdc-amr-basics.md` and registered in `backend/knowledge/sources.seed.json`. This is a local text excerpt, not a full clinical reference or an endorsement by CDC. Its English source supports the demo; generated translations must be checked by the reviewer.
+
+Teammates can add PDF (with selectable text), Markdown and plain-text files to `backend/knowledge/documents/`, then register them in the local `sources.json` manifest. See [the document-store instructions](backend/knowledge/README.md) for the exact format. Source retrieval is local and requires no embeddings service, extra API key or AWS account. Remote URLs are attribution metadata, not instructions for automatic downloading. The content collection can be completed separately from this implementation.
+
+Source approval means the file is admitted to the retrieval corpus; it does not approve generated content. Each generated item must cite a passage actually retrieved during that session. The app checks the quoted passage against the retrieved text and ASHA checks whether it supports the claim and answer. Exact quote matching alone cannot establish medical accuracy. Scanned PDFs require OCR before import. Retrieval is lexical; English search terms work best with the bundled English source.
+
+### Inspecting calls and limiting cost
+
+In the ASHA view, expand the agent trace to inspect the submitted prompts, model/tool calls, retrieved evidence, review decisions, response status and reported token usage. These are operational records and concise decision summaries, not hidden chain-of-thought. API keys and authorization headers are excluded. The learner view suppresses draft material and answer keys; review traces are for the ASHA-led demo.
+
+`backend/.env` supports `AGENT_TURN_MAX_CALLS=4`, `AGENT_SESSION_MAX_CALLS=24`, `AGENT_MAX_OUTPUT_TOKENS=1800`, and `AGENT_TIMEOUT_S=20`. These are hard request limits rather than a monetary spending guarantee. Each model request counts toward the session limit, including failed attempts. A limit or provider error stops the turn and preserves the prior reviewed history; it does not silently switch to fabricated content or a different model.
+
+The new backend endpoints are `GET /agent/sources`, `GET /agent/sessions`, `POST /agent/start`, `GET /agent/session/{id}`, and `POST /agent/session/{id}/action`; the browser accesses them through matching `/api/agent/...` proxy routes. The original `/session/...` endpoints below describe the earlier workflow and do not drive the new page.
+
 ## How it works
 
-A session follows the workflow in Figure 1 of the project proposal:
+The original workflow (retained for earlier sessions) follows Figure 1 of the project proposal. The default is now the batch quiz workflow above; the original workflow is:
 
 1. **Start**: the ASHA worker picks a topic, a language (Kannada, English or Hindi) and a duration (5, 10 or 15 minutes).
 2. **Planning agent**: builds a lesson plan from approved content blocks that fits the time, putting the learner's earlier gaps first.
@@ -83,7 +125,10 @@ CM_Project/
 |- app/                         Next.js pages (App Router)
 |  |- page.tsx                  home: hero, start a session, how it works, services, live figures, helplines
 |  |- learn/page.tsx            learning library: every approved lesson, filter, search, listen
-|  |- session/page.tsx          the session: plan review, lessons, quiz, summary, voice
+|  |- quiz-builder/page.tsx     batch generation, full ASHA review and versioned publication
+|  |- quiz/page.tsx             published catalogue, independent attempts and results
+|  |- agent-session/page.tsx    optional step-by-step LLM activities, citations and trace
+|  |- session/page.tsx          original session: plan review, lessons, quiz, summary, voice
 |  |- settings/page.tsx         backend connection status (provider, model, mode)
 |  |- dashboard/page.tsx        supervisor dashboard: sessions, referral tasks, evaluation results
 |  |- profile/ visits/ certificate/
@@ -119,6 +164,9 @@ CM_Project/
    |  |- safety_controller.py
    |  |- content.py            loads the content repository
    |  '- models.py             Pydantic models for every agent input and output
+   |- quiz_bank.py             grounded batch drafts, immutable versions and scored attempts
+   |- agent_loop.py            optional step-by-step Responses tool loop and persistence
+   |- knowledge.py, knowledge/ local document retrieval, manifests and official demo excerpt
    |- services/                  OpenAI and Bedrock structured-output adapters
    |- content/modules.json     versioned content, quiz bank, source IDs, follow-up texts
    |- eval/                    evaluation scenarios, runner and latest report
@@ -202,6 +250,29 @@ To stop either server, press `Ctrl+C` in its terminal. If a port is already in u
 
 ## Trying it out
 
+For the batch quiz demo:
+
+1. Open `/quiz-builder`, select English and an AMR basics topic covered by the CDC excerpt, and generate a small draft.
+2. Review all questions and their proposed keys, explanations and source passages. Save any corrections or regenerate a particular question.
+3. Approve and publish the whole quiz, then copy its learner link.
+4. Open the link, start an independent attempt, answer every question and submit once. Check the score and approved explanations. No model calls occur during this attempt.
+5. A second learner can start a separate attempt on the same version. Editing the ASHA draft does not change either learner's version.
+
+For the optional step-by-step agent-session demo:
+
+1. Open `/agent-session` or use **Start Session** on the home page. Start with English and an AMR basics topic supported by the bundled CDC excerpt.
+2. In **ASHA review**, inspect the proposed plan and its cited passages. Expand the agent trace to see the actual request, source search and proposal tool calls.
+3. Approve the plan, then request the next activity. Each new lesson, quiz, answer or summary pauses for review again. Use **Request revision** to return corrections to the model.
+4. For a quiz, ASHA checks the proposed options, answer key and explanation against the cited passages before approving it.
+5. Switch to **Learner view** to see only approved material and answer an approved quiz. Submit the answer, then continue: the model receives the recorded result and chooses the next educational activity.
+6. Request a summary when finished. ASHA reviews and approves that summary to complete the session. Reloading or reopening the recent-session link restores the saved state without making an automatic generation request.
+
+No complete permanent question bank is added by this change. Questions are drafted per session from retrieved passages and reviewed before use. Collecting a broad, locally relevant source corpus and creating a reusable reviewed bank remain separate tasks.
+
+### Legacy workflow reference
+
+The following walkthrough describes the original fixed-bank workflow for existing `/session?id=...` sessions, rather than the new default home-page flow.
+
 **Language and text size.** Choose ಕನ್ನಡ, English or हिंदी and A−, A or A+ in the bar at the top of any page. The choice is saved in the browser and stays on every page, and after reloads, until you change it. Saving a profile with a preferred language also sets it.
 
 A five-minute demo that covers every part of the system:
@@ -219,7 +290,7 @@ A five-minute demo that covers every part of the system:
    | Can I take my leftover antibiotics? | Banner (no self-medication advice) |
    | She has swelling on her face after the tablet | Urgent banner telling them to call 104 |
 
-5. **Take the quiz.** In the current quiz bank the correct answer is always B.
+5. **Take the legacy quiz.** In its existing five-question bank the correct answer is always B. This does not describe generated agent-session questions.
    - Answer B every time: the level rises to hard.
    - Answer A every time: the level drops to easy, and each wrong answer shows an explanation plus a reinforcement card.
 6. **Read the summary.** It shows the score, topics covered, gaps with follow-up tasks, and the referral tasks logged in step 4.
@@ -230,7 +301,7 @@ A five-minute demo that covers every part of the system:
 
 ## Using OpenAI
 
-OpenAI is the default optional planning provider. Only the planning agent uses the model; retrieval, tutor, summary and safety use approved content and deterministic rules. Planning output is schema-validated and checked against the approved content before use; invalid output falls back to the rule-based plan.
+OpenAI powers the new LLM-driven sessions above. The original `/session` workflow uses OpenAI only for planning and retains rule-based retrieval, tutoring and summary behavior. Its planning output is schema-validated; invalid plans fall back to local rules. This fallback does not apply to the new agent loop.
 
 1. Set `LLM_PROVIDER=openai` and `OPENAI_API_KEY` in `backend/.env`.
 2. Optionally set `OPENAI_MODEL` (default `gpt-6-luna`), `OPENAI_MAX_TOKENS` (default `1024`), `OPENAI_TIMEOUT_S` (default `60`), and `OPENAI_REASONING_EFFORT` (default `none`).
@@ -269,9 +340,24 @@ To check that a model is still active:
 aws bedrock get-foundation-model --model-identifier amazon.nova-pro-v1:0 --query modelDetails.modelLifecycle
 ```
 
-**How the model is used:** only the planning agent calls it. Its output must pass Pydantic schema validation and backend checks: every content ID must exist and belong to its module, and the plan must fit the time. If the output fails, the backend falls back to the rule-based plan and logs why. The retrieval, tutor, summary and safety components are deterministic.
+**Legacy Bedrock workflow:** only the planning agent calls this provider. The new LLM-driven session uses OpenAI instead. Its output must pass Pydantic schema validation and backend checks: every content ID must exist and belong to its module, and the plan must fit the time. If the output fails, the backend falls back to the rule-based plan and logs why. The retrieval, tutor, summary and safety components are deterministic.
 
 ## API reference
+
+The batch quiz frontend uses these routes (the backend uses the same paths without `/api`):
+
+| Frontend route | Purpose | OpenAI calls? |
+|---|---|---|
+| `GET /api/quizzes` | List latest published quizzes | No |
+| `POST /api/quizzes/drafts` | Generate the complete source-grounded draft | Yes |
+| `GET /api/quizzes/drafts/{id}` | ASHA review data, keys, sources and trace | No |
+| `POST /api/quizzes/drafts/{id}/action` | Edit, regenerate or publish with an expected revision | Regeneration only |
+| `GET /api/quizzes/{id}?version=N` | Public quiz without keys or explanations | No |
+| `POST /api/quizzes/{id}/attempts` | Start an independent pinned-version attempt | No |
+| `GET /api/quizzes/attempts/{id}` | Reload an attempt and any completed result | No |
+| `POST /api/quizzes/attempts/{id}/submit` | Submit the complete answer set and receive its saved grade | No |
+
+The original session API is retained below:
 
 The browser calls the Next.js routes on the left; they forward to the backend routes on the right.
 
@@ -483,7 +569,7 @@ Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, N
 - **Earlier evaluation state.** The latest recorded evaluation used mock mode. Configure either provider and rerun the evaluation to measure the AI plan metric.
 - **New interface text in Kannada and Hindi** (menus, headings, home page sections) was written for the redesign and should be checked by native speakers. Lesson content is unchanged.
 - **There is no reviewed Hindi content yet.** Hindi sessions show English lesson text, and the Hindi safety phrases and messages need native review.
-- **The content library is small** (15 blocks, 5 quiz questions). Adding reviewed material is the most useful next step; see [Adding content](#adding-content).
+- **Next task: expand the source-backed question bank.** The current library has 15 blocks and only 5 quiz questions. Find suitable official questions or draft additional questions from official guidance, recording per-question source URLs, supporting passages and whether each question is copied, adapted or AI-drafted. Check answers, explanations and translations before marking items approved; do not describe source-based drafts as government-approved. Keep this expansion separate from the current OpenAI setup task; see [Adding content](#adding-content).
 - **The local database is per person.** For one shared dashboard across several phones, the backend and database need to be hosted in one place.
 - **Profiles, visits, spaced-repetition gaps and district coverage** are still kept in each browser's localStorage.
 - **Some code is now unused.** `app/api/session/route.ts`, `app/api/safety/route.ts`, `lib/agents/*`, `lib/safety.ts`, `lib/safety-log.ts` and `lib/session-store.ts` can be removed once the team agrees.
