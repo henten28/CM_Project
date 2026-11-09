@@ -25,7 +25,7 @@ AMR Jagruti is an education tool. It does not diagnose, prescribe, suggest doses
 
 ## Quickstart
 
-Requirements: Node.js 20+, Python 3.10+, and Git. The backend defaults to OpenAI with automatic mock mode: with no key, it uses the local rule-based planner; with a key, only the planning agent calls the model.
+Requirements: Node.js 20+, Python 3.10+, and Git. The default demo needs no AWS credentials or Bedrock packages. With an OpenAI key, only the planner calls OpenAI; retrieval, tutor, summary and safety use approved content and deterministic rules. Without an OpenAI key, the planner uses local mock mode.
 
 ```bash
 git clone https://github.com/henten28/CM_Project.git && cd CM_Project
@@ -244,14 +244,18 @@ To use Bedrock instead of the default OpenAI provider:
 
 1. Get access to a Bedrock model in your AWS account (for example Amazon Nova Pro).
 2. Give the backend credentials in the standard AWS way: `aws configure`, `AWS_PROFILE`, or an IAM role. Do not put credentials in the frontend or in any `NEXT_PUBLIC_*` variable.
-3. In `backend/.env`, set:
+3. From the `backend/` directory, install the optional Bedrock dependencies:
+   ```bash
+   pip install -r requirements-bedrock.txt
+   ```
+4. In `backend/.env`, set:
    ```
    LLM_PROVIDER=bedrock
    AWS_REGION=us-east-1
    BEDROCK_MODEL=nova-pro
    BEDROCK_MOCK=auto
    ```
-4. Restart the backend. The Settings page reports the configured provider, model and (for Bedrock) region. Its Connected indicator only means the backend is reachable; it does not ping the provider.
+5. Restart the backend. The Settings page reports the configured provider, model and (for Bedrock) region. Its Connected indicator only means the backend is reachable; it does not ping the provider.
 
 **Model aliases:**
 - `nova-pro` (default), `nova-lite`, `nova-micro`

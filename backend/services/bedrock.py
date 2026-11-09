@@ -3,9 +3,6 @@ import logging
 from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel, ValidationError
 
 import config
@@ -35,6 +32,13 @@ class BedrockError(RuntimeError):
 @lru_cache(maxsize=1)
 def _client():
     # credentials come from the standard boto3 chain (env vars, ~/.aws, IAM role) and never leave this process
+    try:
+        import boto3
+        from botocore.config import Config
+    except ModuleNotFoundError as e:
+        raise BedrockError(
+            "Bedrock support requires optional dependencies; install with `pip install -r requirements-bedrock.txt`"
+        ) from e
     return boto3.client(
         "bedrock-runtime",
         region_name=config.AWS_REGION,
@@ -58,6 +62,12 @@ def is_mock_mode() -> bool:
         return True
     if config.BEDROCK_MOCK in ("0", "false", "no"):
         return False
+    try:
+        import boto3
+    except ModuleNotFoundError as e:
+        raise BedrockError(
+            "Bedrock support requires optional dependencies; install with `pip install -r requirements-bedrock.txt`"
+        ) from e
     has_creds = boto3.Session().get_credentials() is not None  # "auto"
     if not has_creds:
         log.warning("no AWS credentials found, Bedrock running in mock mode")
@@ -103,6 +113,12 @@ def _tool_choice(model_id: str) -> Dict[str, Any]:
 
 
 async def _call_converse(**kwargs) -> Dict[str, Any]:
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ModuleNotFoundError as e:
+        raise BedrockError(
+            "Bedrock support requires optional dependencies; install with `pip install -r requirements-bedrock.txt`"
+        ) from e
     try:
         # boto3 is synchronous; run it in a worker thread so the event loop stays free
         return await asyncio.to_thread(_client().converse, **kwargs)
