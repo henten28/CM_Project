@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PrefsApplier from "@/components/PrefsApplier";
 
 export const metadata: Metadata = {
   title: "AMR Jagruti — ASHA-Led AMR Education",
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body>
+        <PrefsApplier />
         {children}
         <script dangerouslySetInnerHTML={{__html:`
           if ('serviceWorker' in navigator) {

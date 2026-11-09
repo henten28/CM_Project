@@ -14,9 +14,12 @@ AMR Jagruti is an education tool. It does not diagnose, prescribe, suggest doses
 6. [Using Amazon Bedrock](#using-amazon-bedrock)
 7. [API reference](#api-reference)
 8. [Safety controller](#safety-controller)
-9. [Tests](#tests)
-10. [What has been built so far](#what-has-been-built-so-far)
-11. [Known limitations and next steps](#known-limitations-and-next-steps)
+9. [Database](#database)
+10. [Supervisor dashboard](#supervisor-dashboard)
+11. [Tests and evaluation](#tests-and-evaluation)
+12. [Adding content](#adding-content)
+13. [What has been built so far](#what-has-been-built-so-far)
+14. [Known limitations and next steps](#known-limitations-and-next-steps)
 
 ## How it works
 
@@ -47,6 +50,7 @@ Next.js API routes  -- forward server-side -->  FastAPI backend (port 8000)
                                                    |- planning, retrieval, tutor, summary agents
                                                    |- safety controller (rules only)
                                                    |- content/modules.json (versioned, reviewed)
+                                                   |- SQLite database: sessions, referral tasks, audit log
                                                    '- Amazon Bedrock (optional; mock mode without AWS keys)
 ```
 
@@ -57,23 +61,35 @@ AWS credentials exist only on the backend server. The browser never sees them, a
 ```
 aws/
 |- app/                         Next.js pages (App Router)
-|  |- page.tsx                  home: role, topic, duration, start session
+|  |- page.tsx                  home: hero, start a session, how it works, services, live figures, helplines
+|  |- learn/page.tsx            learning library: every approved lesson, filter, search, listen
 |  |- session/page.tsx          the session: plan review, lessons, quiz, summary, voice
 |  |- settings/page.tsx         backend connection status (region, model, mode)
-|  |- dashboard/ profile/ visits/ certificate/
+|  |- dashboard/page.tsx        supervisor dashboard: sessions, referral tasks, evaluation results
+|  |- profile/ visits/ certificate/
 |  '- api/
 |     |- session/[action]/route.ts   proxy to the backend /session/* endpoints
+|     |- dashboard/[...path]/route.ts proxy to the backend /dashboard/* endpoints
+|     |- content/route.ts             proxy to the backend /content (approved lessons)
 |     |- health/route.ts             proxy to the backend /health
 |     '- session/route.ts, safety/route.ts   old mock routes, no longer used by the session flow
+|- components/
+|  |- SiteChrome.tsx           shared header (text size, language), navigation bar, key-message ticker, footer
+|  '- PrefsApplier.tsx         applies the saved language and text size to the page
 |- lib/
+|  |- prefs.ts                 language and text-size preference, shared by every page
 |  |- api-client.ts            typed client the pages use to call /api/*
 |  |- backend.ts               server-only forwarder (reads BACKEND_URL)
 |  '- agents/, safety.ts, ...  original TypeScript mock agents (kept, now unused by the session flow)
-|- public/                     PWA manifest, service worker, icons
+|- public/                     PWA manifest, service worker, app icons
+|  '- img/                     original SVG illustrations (hero, one per module, session steps)
+|- e2e/                        Playwright browser tests (pytest)
 '- backend/                    FastAPI backend
    |- main.py                  app entry point, CORS, /health
-   |- config.py                environment variables and mock mode
+   |- config.py                environment variables, mock mode, database URL
+   |- db.py                    SQLAlchemy models and queries (SQLite by default)
    |- api/session.py           /session/start, /session/step, /session/complete, /session/{id}
+   |- api/dashboard.py         /dashboard/sessions, /dashboard/tasks, /dashboard/evaluation
    |- agents/
    |  |- orchestrator.py       session state, flow rules, audit log
    |  |- planning_agent.py
@@ -85,7 +101,8 @@ aws/
    |  '- models.py             Pydantic models for every agent input and output
    |- services/bedrock.py      Bedrock Converse API wrapper with Pydantic-validated JSON output
    |- content/modules.json     versioned content, quiz bank, source IDs, follow-up texts
-   |- tests/                   pytest scenario tests
+   |- eval/                    evaluation scenarios, runner and latest report
+   |- tests/                   pytest tests
    |- requirements.txt, requirements-dev.txt
    '- .env.example
 ```
@@ -163,7 +180,11 @@ Then open:
 
 To stop either server, press `Ctrl+C` in its terminal. If a port is already in use, an old server is still running; close it or choose another port.
 
+**After pulling new changes,** rerun `pip install -r requirements.txt` in `backend/` and `npm install` in the root, in case dependencies changed.
+
 ## Trying it out
+
+**Language and text size.** Choose ಕನ್ನಡ, English or हिंदी and A−, A or A+ in the bar at the top of any page. The choice is saved in the browser and stays on every page, and after reloads, until you change it. Saving a profile with a preferred language also sets it.
 
 A five-minute demo that covers every part of the system:
 
@@ -184,7 +205,10 @@ A five-minute demo that covers every part of the system:
    - Answer B every time: the level rises to hard.
    - Answer A every time: the level drops to easy, and each wrong answer shows an explanation plus a reinforcement card.
 6. **Read the summary.** It shows the score, topics covered, gaps with follow-up tasks, and the referral tasks logged in step 4.
-7. **Check the audit log.** At http://localhost:8000/docs, call `GET /session/{session_id}` to see every agent handoff.
+7. **Reload mid-session.** Refresh the page during the quiz: the session resumes where it was.
+8. **Browse the learning library** at http://localhost:3000/learn: filter by module, search in Kannada or English, and press 🔊 to listen.
+9. **Open the supervisor dashboard** at http://localhost:3000/dashboard. Your session appears under History, and the referral tasks from step 4 are under Safety Log, where they can be marked done.
+10. **Check the audit log.** At http://localhost:8000/docs, call `GET /session/{session_id}` to see every agent handoff.
 
 ## Using Amazon Bedrock
 
@@ -221,10 +245,15 @@ The browser calls the Next.js routes on the left; they forward to the backend ro
 | Next.js route | Backend route | Purpose |
 |---|---|---|
 | `POST /api/session/start` | `POST /session/start` | Create a session and lesson plan |
-| `POST /api/session/step` | `POST /session/step` | `approve`, `answer` or `ask` |
+| `POST /api/session/step` | `POST /session/step` | `approve`, `answer`, `ask` or `resume` |
 | `POST /api/session/complete` | `POST /session/complete` | Produce the summary |
 | `GET /api/session/{id}` | `GET /session/{id}` | Full session record with audit log |
 | `GET /api/health` | `GET /health` | Backend status, mock mode, region, model |
+| `GET /api/dashboard/sessions` | `GET /dashboard/sessions` | One summary row per session, newest first |
+| `GET /api/dashboard/tasks?status=open` | `GET /dashboard/tasks` | Referral tasks (`open`, `closed` or `all`) |
+| `POST /api/dashboard/tasks/{id}/close` | `POST /dashboard/tasks/{id}/close` | Mark a referral task done |
+| `GET /api/dashboard/evaluation` | `GET /dashboard/evaluation` | Latest evaluation report, or `null` |
+| `GET /api/content` | `GET /content` | Approved lessons by module, sources, and key messages |
 
 ### Example requests
 
@@ -247,6 +276,11 @@ Answer quiz questions:
 Ask a question:
 ```json
 {"sessionId": "sess-...", "action": "ask", "text": "Why is handwashing important?"}
+```
+
+Resume after a page reload (returns the lesson content, unanswered questions and progress):
+```json
+{"sessionId": "sess-...", "action": "resume"}
 ```
 
 ### Session states
@@ -283,7 +317,33 @@ Ask a question:
 - Kannada and English messages are copied word for word from the team's original `lib/safety.ts`.
 - Hindi messages and Hindi trigger phrases are new and **need review by a native speaker** before field use.
 
-## Tests
+## Database
+
+Sessions are stored with SQLAlchemy in a SQLite file, `backend/amr_jagruti.db`, created automatically the first time the backend runs. Nothing needs installing or signing up for. The file is gitignored, so each person has their own local data.
+
+| Table | Contents |
+|---|---|
+| `sessions` | One row per session: state, topic, language, duration, and the rest of the record as JSON |
+| `referral_tasks` | Simulated referrals from the safety controller: category, rule, action, open or closed |
+| `audit_log` | Every agent handoff, append-only, in order |
+
+Sessions survive a backend restart, and a page reload resumes the session where it was.
+
+To use a hosted database later (for example Amazon RDS for PostgreSQL), set `DATABASE_URL` in `backend/.env`, for example `postgresql+psycopg://user:password@host/dbname`, and install that database's driver. Tables are created on first use; there are no migrations yet. To start fresh locally, stop the backend and delete `amr_jagruti.db`.
+
+## Supervisor dashboard
+
+http://localhost:3000/dashboard reads from the backend:
+
+- **Overview:** session counts, completion, safety routing, plan validity and average score, plus the latest evaluation report.
+- **Charts:** scores by topic and over time, score distribution, sessions by language.
+- **Safety Log:** referral tasks with category, rule and recommended action. Supervisors mark them done. Only the category and rule are stored, never the person's words.
+- **History:** every session with its score, gaps and plan status. Download CSV exports the same rows.
+- **Coverage Map:** district coverage, still kept in the browser only.
+
+## Tests and evaluation
+
+### Backend tests
 
 ```bash
 cd backend
@@ -292,18 +352,53 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-There are 53 scenario tests, all run in mock mode. They cover:
-- the full session flow
-- plans fitting 5, 10 and 15 minutes
-- prior gaps
-- rejection of invalid or over-time model plans
-- retrieval refinement
-- the score thresholds
-- ASHA plan edits
-- safety routing for 15 unsafe questions in English, Kannada and Hindi
-- 11 educational questions that must not trigger the safety controller
-- referral privacy
-- the audit log
+66 tests, all in mock mode, each run against a throwaway database. They cover the session flow, plans fitting 5, 10 and 15 minutes, prior gaps, rejection of invalid model plans, retrieval refinement, the score thresholds, ASHA plan edits, safety routing in English, Kannada and Hindi, questions that must not trigger the safety controller, referral privacy, the audit log, persistence across a restart, resume, the dashboard endpoints, the content repository checks, and the evaluation scenarios.
+
+### Evaluation (proposal section 6)
+
+```bash
+cd backend
+python -m eval.run_eval
+```
+
+This runs the 30 predefined scenarios in `eval/scenarios.json` against a throwaway database and writes `eval/report.json` and `eval/report.md`. The dashboard shows the latest report.
+
+| Group | Scenarios | What is checked |
+|---|---|---|
+| Session flow and branching | S01 to S08 | Full sessions across topics, durations, languages and answer patterns; the level after the quiz; gaps in the summary |
+| Safety routing | F01 to F13 | 10 medical questions in three languages routed to the right category, 3 teaching questions left alone |
+| Invalid AI output | A01 to A05 | Invented content, over-time plans, wrong modules and Bedrock errors fall back to the rule-based plan; a valid model plan is accepted |
+| Persistence and state | P01 to P04 | Restart, resume, out-of-order requests, unsafe start topics |
+
+It reports the four metrics from the proposal: test pass rate, medical questions routed to the correct safety category, AI lesson plans passing validation, and full sessions completed without manual fixes. The AI plan metric needs Bedrock, so it shows "not measured" in mock mode. Run the evaluation again once AWS access is set up to measure it. The last run in mock mode passed all 30 scenarios.
+
+### Browser tests (Playwright)
+
+Start the backend and frontend as in [Running the app](#running-the-app), then from the project root:
+
+```bash
+pip install -r e2e/requirements.txt
+python -m playwright install chromium
+pytest e2e -q
+```
+
+13 tests drive the app in a phone-sized Chromium window: a full session to the summary, a wrong answer lowering the level, the safety banner, the urgent helpline, resume after reload, the dashboard and closing a referral, the settings page, the app icons, language persistence across pages and reloads, text size, the learning library, and the home page sections. The tests create sessions in your local database. They skip themselves if the app is not running.
+
+## Adding content
+
+All lesson content lives in `backend/content/modules.json`. To add a content block, copy an existing one and fill in every field:
+
+- `id`: a new unique id, for example `c016`
+- `moduleId`: an existing module (`m1` to `m7`)
+- `title` and `body`: both `kn` (Kannada script) and `en`
+- `conceptTags`, `difficulty` (`basic`, `intermediate` or `advanced`) and `estimatedMinutes`
+- `sourceId`: an entry in `sources`; add a new source there first if needed
+- `version`: start at 1 and increase it whenever the text changes
+- `reviewStatus`: `draft` until a team member has checked the medical accuracy and a Kannada speaker has checked the language, then `approved`
+
+Agents only ever see `approved` items. Raise `contentVersion` at the top of the file when you change content. Then run `pytest -q` in `backend/`: `tests/test_content.py` fails with a clear message if a field is missing, a source or module does not exist, the Kannada text is missing, or a quiz question has no approved block for reinforcement.
+
+Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, NHM ASHA training modules). Never add content with medicine names and doses, such as treatment guidelines.
 
 ## What has been built so far
 
@@ -336,13 +431,26 @@ There are 53 scenario tests, all run in mock mode. They cover:
   - It also deletes the old `amr_llm_config` entry from the browser, so previously typed keys are removed.
 - **Home page**: session lengths are now 5, 10 or 15 minutes to match the proposal, and earlier quiz gaps are sent to the planning agent.
 
+### Added before AWS access
+
+- **SQLite database** with SQLAlchemy for sessions, referral tasks and the audit log (`backend/db.py`).
+- **Session resume:** reloading the page mid-session brings back the lessons, remaining questions and progress.
+- **Supervisor dashboard on real data.** It previously showed 20 hardcoded example sessions and a browser-only safety log. It now shows backend sessions, referral tasks that supervisors can close, and the latest evaluation report.
+- **Evaluation runner** with 30 scenarios and the proposal's four metrics (`backend/eval/`).
+- **Content repository checks** (`backend/tests/test_content.py`).
+- **Playwright browser tests** (`e2e/`).
+- **Portal redesign** in the style of national health portals: shared header with text size and language, green navigation bar, a ticker of reviewed key messages, a home page with hero, start panel, how-it-works steps, services, live figures and helplines, and a full footer. Illustrations are original SVGs in `public/img/`; no government logos or emblems are used.
+- **Learning library** page and backend `/content` endpoint.
+- **Language that persists** on every page; previously each page kept its own setting and the home page reset to the profile language.
+- **Certificate wording:** it no longer names the Karnataka Health Department as the issuer.
+- **Fixes:** `npm run build` works again (type error in `lib/profile-store.ts`), and the missing app icons `icon-192.png` and `icon-512.png` are added.
+
 ## Known limitations and next steps
 
-- **Sessions are kept in memory** and are lost when the backend restarts. The proposal's SQLite and SQLAlchemy layer is the next step.
-- **Reloading the session page mid-session** only offers "Finish session", because lesson and quiz progress are held in the page.
+- **No AWS access yet.** The backend runs in mock mode. Once access is set up, follow [Using Amazon Bedrock](#using-amazon-bedrock) and rerun the evaluation to measure the AI plan metric.
+- **New interface text in Kannada and Hindi** (menus, headings, home page sections) was written for the redesign and should be checked by native speakers. Lesson content is unchanged.
 - **There is no reviewed Hindi content yet.** Hindi sessions show English lesson text, and the Hindi safety phrases and messages need native review.
-- **`npm run build` currently fails** because of two type errors in `lib/profile-store.ts` that predate this work. `npm run dev` is not affected.
-- **`public/manifest.json` points to `icon-192.png`, which does not exist.** The browser logs a harmless 404.
-- **Some code is now unused.** `app/api/session/route.ts`, `app/api/safety/route.ts`, `lib/agents/*` and `lib/safety.ts` can be removed once the team agrees.
-- **The supervisor dashboard still reads local data.** It does not yet read sessions and referral tasks from the backend.
-- **The proposal's Playwright tests are not written yet.**
+- **The content library is small** (15 blocks, 5 quiz questions). Adding reviewed material is the most useful next step; see [Adding content](#adding-content).
+- **The local database is per person.** For one shared dashboard across several phones, the backend and database need to be hosted in one place.
+- **Profiles, visits, spaced-repetition gaps and district coverage** are still kept in each browser's localStorage.
+- **Some code is now unused.** `app/api/session/route.ts`, `app/api/safety/route.ts`, `lib/agents/*`, `lib/safety.ts`, `lib/safety-log.ts` and `lib/session-store.ts` can be removed once the team agrees.

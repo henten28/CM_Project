@@ -105,6 +105,7 @@ class EscalationTask(BaseModel):
     status: Literal["open", "closed"] = "open"
     simulated: bool = True  # prototype: no real referral is sent
     createdAt: str = Field(default_factory=now_iso)
+    closedAt: Optional[str] = None  # set when a supervisor closes the task
 
 
 class SafetyResult(BaseModel):

@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getProfile, type AshaProfile } from "@/lib/profile-store";
 import { getDueReviews } from "@/lib/spaced-repetition";
-import { startSession } from "@/lib/api-client";
+import { startSession, getDashboardSessions, getContentLibrary } from "@/lib/api-client";
+import { useLang, tr } from "@/lib/prefs";
+import { SiteHeader, SiteFooter, KeyMessageTicker } from "@/components/SiteChrome";
 
 const T = {
   kn: {
@@ -108,211 +111,259 @@ const T = {
   },
 };
 
+// picture for each session topic (original illustrations in public/img)
+const TOPIC_IMG: Record<string, string> = {
+  general: "/img/step3.svg", antibiotics: "/img/m1.svg", amr: "/img/m2.svg",
+  prevention: "/img/m6.svg", sharing: "/img/m4.svg", "case study": "/img/m7.svg",
+};
+
 export default function LandingPage() {
-  const [lang, setLang] = useState<"kn" | "en" | "hi">("kn");
-  const [role, setRole] = useState<"asha" | "supervisor" | null>(null);
+  const [lang] = useLang();  // shared, saved preference; changed from the header
   const [topic, setTopic] = useState("general");
   const [minutes, setMinutes] = useState("10");
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<AshaProfile | null>(null);
   const [dueReviews, setDueReviews] = useState<{ tag: string; label: Record<string,string> }[]>([]);
+  const [stats, setStats] = useState<{ sessions: number; completed: number; avg: number; lessons: number } | null>(null);
   const router = useRouter();
   const t = T[lang];
   const fk = lang === "kn" ? "kn" : "";
+  const L = (kn: string, en: string, hi: string) => tr(lang, kn, en, hi);
 
   useEffect(() => {
-    const p = getProfile();
-    if (p) { setProfile(p); setLang(p.lang); }
+    // profile and review reminders live in this browser (localStorage); the language no longer comes from here
+    setProfile(getProfile());
     setDueReviews(getDueReviews());
   }, []);
 
+  useEffect(() => {
+    // live figures for the statistics strip; the strip hides itself if the backend is down
+    Promise.all([getDashboardSessions(), getContentLibrary()]).then(([s, lib]) => {
+      const done = s.filter((x) => x.sessionCompleted);
+      setStats({
+        sessions: s.length, completed: done.length,
+        avg: done.length ? Math.round(done.reduce((n, x) => n + x.quizScore, 0) / done.length) : 0,
+        lessons: lib.modules.reduce((n, m) => n + m.blocks.length, 0),
+      });
+    }).catch(() => setStats(null));
+  }, []);
+
   async function handleStart() {
-    if (role !== "asha") return;
     setLoading(true);
     try {
       // spaced-repetition gaps go to the planning agent as prior gaps
       const data = await startSession({ topic, durationMinutes: Number(minutes) as 5 | 10 | 15, lang,
                                         priorGaps: dueReviews.map((r) => r.tag) });
-      router.push(`/session?id=${data.sessionId}&lang=${lang}`);
+      router.push(`/session?id=${data.sessionId}`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not reach the backend");
     } finally { setLoading(false); }
   }
 
+  const badges = [
+    { cls: "fb1", icon: "🔤", bg: "#e3eefc", label: L("ಕನ್ನಡ-ಮೊದಲ", "Kannada-first", "कन्नड़-प्रथम") },
+    { cls: "fb2", icon: "🎙️", bg: "#fde2e4", label: L("ಧ್ವನಿ ಬೆಂಬಲ", "Voice support", "वॉयस सपोर्ट") },
+    { cls: "fb3", icon: "🛡️", bg: "#d8f3dc", label: L("ಸುರಕ್ಷತಾ ಪರಿಶೀಲನೆ", "Safety-checked", "सुरक्षा जांच") },
+    { cls: "fb4", icon: "🤖", bg: "#fff3cd", label: L("4 ತಜ್ಞ ಏಜೆಂಟ್", "4 specialist agents", "4 विशेषज्ञ एजेंट") },
+  ];
+
+  const steps = [
+    { c: "#6a4c93", img: "/img/step1.svg", title: L("ಯೋಜನಾ ಏಜೆಂಟ್", "Planning agent", "योजना एजेंट"),
+      text: L("ಹಿಂದಿನ ಕೊರತೆಗಳಿಂದ ಆರಂಭಿಸಿ, 5, 10 ಅಥವಾ 15 ನಿಮಿಷಕ್ಕೆ ಹೊಂದುವ ಅನುಮೋದಿತ ಪಾಠಗಳನ್ನು ಆಯ್ಕೆ ಮಾಡುತ್ತದೆ.",
+              "Picks approved lessons that fit 5, 10 or 15 minutes, starting with earlier gaps.",
+              "पिछली कमियों से शुरू करके 5, 10 या 15 मिनट में फिट होने वाले स्वीकृत पाठ चुनता है।") },
+    { c: "#e07a2f", img: "/img/step2.svg", title: L("ASHA ಅನುಮೋದನೆ", "ASHA approves", "ASHA अनुमोदन"),
+      text: L("ಕಲಿಸುವ ಮೊದಲು ASHA ಕಾರ್ಯಕರ್ತೆ ಯೋಜನೆಯನ್ನು ಪರಿಶೀಲಿಸುತ್ತಾರೆ.",
+              "The ASHA worker reviews the plan before anything is taught.",
+              "ASHA कार्यकर्ता पढ़ाने से पहले योजना की जांच करती हैं।") },
+    { c: "#1d3557", img: "/img/step3.svg", title: L("ಕಲಿಕೆ ಮತ್ತು ರಸಪ್ರಶ್ನೆ", "Learn and quiz", "सीखें और प्रश्नोत्तरी"),
+      text: L("ಪಾಠಗಳನ್ನು ಓದಿ ಕೇಳಿಸಲಾಗುತ್ತದೆ; ರಸಪ್ರಶ್ನೆ ಅಂಕಕ್ಕೆ ಹೊಂದಿಕೊಳ್ಳುತ್ತದೆ.",
+              "Lessons are read aloud and the quiz adapts to the score.",
+              "पाठ पढ़कर सुनाए जाते हैं और प्रश्नोत्तरी स्कोर के अनुसार बदलती है।") },
+    { c: "#2d6a4f", img: "/img/step4.svg", title: L("ಸಾರಾಂಶ", "Summary", "सारांश"),
+      text: L("ಕೊರತೆಗಳು, ಮುಂದಿನ ಕಾರ್ಯಗಳು ಮತ್ತು ರೆಫರಲ್‌ಗಳನ್ನು ಮೇಲ್ವಿಚಾರಕರಿಗಾಗಿ ಉಳಿಸಲಾಗುತ್ತದೆ.",
+              "Gaps, follow-up tasks and referrals are saved for the supervisor.",
+              "कमियां, अगले कार्य और रेफरल पर्यवेक्षक के लिए सहेजे जाते हैं।") },
+  ];
+
+  const services = [
+    { href: "/#start", img: "/img/step3.svg", title: L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ", "Start a session", "सत्र शुरू करें"),
+      text: L("ಮನೆ ಭೇಟಿಯ ವೇಳೆ ಚಿಕ್ಕ AMR ಪಾಠ ನಡೆಸಿ.", "Run a short AMR lesson during a home visit.", "घर के दौरे में छोटा AMR पाठ चलाएं।") },
+    { href: "/learn", img: "/img/m7.svg", title: L("ಕಲಿಕಾ ಗ್ರಂಥಾಲಯ", "Learning library", "सीखने की लाइब्रेरी"),
+      text: L("ಎಲ್ಲಾ ಅನುಮೋದಿತ ಪಾಠಗಳನ್ನು ನೋಡಿ ಮತ್ತು ಕೇಳಿ.", "Browse every approved lesson and listen to it.", "सभी स्वीकृत पाठ देखें और सुनें।") },
+    { href: "/visits", img: "/img/m5.svg", title: L("ಮನೆ ಭೇಟಿ", "Household visits", "घर दौरे"),
+      text: L("ಭೇಟಿ ನೀಡಿದ ಕುಟುಂಬಗಳು ಮತ್ತು ವಿಷಯಗಳನ್ನು ದಾಖಲಿಸಿ.", "Log families visited and topics covered.", "जिन परिवारों से मिले और विषय दर्ज करें।") },
+    { href: "/dashboard", img: "/img/step4.svg", title: L("ಮೇಲ್ವಿಚಾರಕ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್", "Supervisor dashboard", "पर्यवेक्षक डैशबोर्ड"),
+      text: L("ಅಧಿವೇಶನಗಳು, ರೆಫರಲ್ ಕಾರ್ಯಗಳು ಮತ್ತು ಮೌಲ್ಯಮಾಪನ ಫಲಿತಾಂಶ.", "Sessions, referral tasks and evaluation results.", "सत्र, रेफरल कार्य और मूल्यांकन परिणाम।") },
+    { href: "/profile", img: "/img/step2.svg", title: L("ನನ್ನ ಪ್ರೊಫೈಲ್", "My profile", "मेरी प्रोफ़ाइल"),
+      text: L("ನಿಮ್ಮ ಹೆಸರು, ಬ್ಲಾಕ್ ಮತ್ತು ಜಿಲ್ಲೆ.", "Your name, block and district.", "आपका नाम, ब्लॉक और जिला।") },
+  ];
+
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
-      <header className="app-header">
-        <div className="logo">
-          <div className="logo-icon">A</div>
-          <div>
-            <div className="logo-text">AMR ಜಾಗೃತಿ</div>
-            <div className="logo-sub">AMR Jagruti</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="lang-toggle">
-            <button id="lang-kn" className={lang==="kn"?"active":""} onClick={()=>setLang("kn")}>ಕನ್ನಡ</button>
-            <button id="lang-en" className={lang==="en"?"active":""} onClick={()=>setLang("en")}>EN</button>
-            <button id="lang-hi" className={lang==="hi"?"active":""} onClick={()=>setLang("hi")}>हिं</button>
-          </div>
-          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.8)" }} onClick={() => router.push("/profile")}>👤</button>
-          <button className="btn btn-ghost btn-sm" style={{ color: "rgba(255,255,255,0.8)" }} onClick={() => router.push("/settings")}>⚙️</button>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <div className="hero-bg">
-        <div className="container">
-          <div className="hero-badge"><span>🌿</span><span className={fk}>{t.badge}</span></div>
-          <h1 className={`hero-title ${fk}`}>{t.heroTitle}</h1>
-          <p className={`hero-sub ${fk}`}>{t.heroSub}</p>
-          <div className="flex gap-3 mt-6" style={{ justifyContent: "center", flexWrap: "wrap" }}>
-            {[
-              { icon: "🤖", label: lang==="kn"?"4 ತಜ್ಞ ಏಜೆಂಟ್":lang==="hi"?"4 विशेषज्ञ एजेंट":"4 Specialist Agents" },
-              { icon: "🔤", label: lang==="kn"?"ಕನ್ನಡ-ಮೊದಲ":lang==="hi"?"कन्नड़-प्रथम":"Kannada-first" },
-              { icon: "🎙️", label: lang==="kn"?"ಧ್ವನಿ ಬೆಂಬಲ":lang==="hi"?"वॉयस सपोर्ट":"Voice Support" },
-              { icon: "📴", label: lang==="kn"?"ಆಫ್‌ಲೈನ್ ಕಾರ್ಯ":lang==="hi"?"ऑफलाइन काम":"Offline Ready" },
-            ].map(s=>(
-              <div key={s.label} style={{ background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:12,padding:"8px 14px",fontSize:"0.8rem",fontWeight:600,display:"flex",gap:6,alignItems:"center" }}>
-                <span>{s.icon}</span><span className={fk}>{s.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <main style={{ flex:1, padding:"24px 16px 40px" }}>
-        <div className="container">
-
-          {/* Profile greeting */}
-          {profile ? (
-            <div className="card mb-4 animate-fade" style={{ background:"linear-gradient(135deg,var(--green-50),var(--amber-100))", border:"1.5px solid var(--green-600)" }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className={`font-bold text-primary ${fk}`}>👋 {t.welcome}, {profile.name}</div>
-                  <div className="text-xs text-muted mt-1">{profile.block}, {profile.district} · {lang==="kn"?"ಒಟ್ಟು ಅಧಿವೇಶನ":lang==="hi"?"कुल सत्र":"Sessions"}: {profile.totalSessions}</div>
-                </div>
-                <button className="btn btn-outline btn-sm" onClick={()=>router.push("/profile")}>{t.profile} →</button>
+    <div className="portal">
+      <SiteHeader />
+      <KeyMessageTicker />
+      <main>
+        {/* Hero */}
+        <section className="hero2">
+          <div className="wrap hero2-grid">
+            <div>
+              <span className="chip"><span>🌿</span><span className={fk}>{t.badge}</span></span>
+              <h1 className={fk}>{L("ಒಂದೊಂದೇ ಮನೆಯಲ್ಲಿ AMR ಅರಿವು", "Bridging the AMR awareness gap, one household at a time", "हर घर तक AMR जागरूकता")}</h1>
+              <p className={fk}>{t.heroSub}</p>
+              <div className="hero2-cta">
+                <a href="#start" className={`btn btn-primary btn-lg ${fk}`}>{t.start}</a>
+                <Link href="/learn" className={`btn btn-outline btn-lg ${fk}`}>📚 {L("ಕಲಿಕಾ ಗ್ರಂಥಾಲಯ", "Learning library", "सीखने की लाइब्रेरी")}</Link>
               </div>
             </div>
-          ) : (
-            <div className="card mb-4" style={{ border:"1.5px dashed var(--border)", textAlign:"center", padding:"14px" }}>
-              <div className="text-sm text-muted">{t.noProfile}</div>
-              <button className="btn btn-primary btn-sm mt-2" onClick={()=>router.push("/profile")}>{t.setupProfile}</button>
+            <div className="hero-art">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/hero.svg" alt={L("ಮನೆಗೆ ಭೇಟಿ ನೀಡಿದ ASHA ಕಾರ್ಯಕರ್ತೆ", "An ASHA worker visiting a mother and child at home", "घर पर मां और बच्चे से मिलती ASHA कार्यकर्ता")} />
+              {badges.map((b) => (
+                <div key={b.cls} className={`float-badge ${b.cls} ${fk}`}><span className="fb-icon" style={{ background: b.bg }}>{b.icon}</span>{b.label}</div>
+              ))}
             </div>
-          )}
-
-          {/* Spaced repetition alert */}
-          {dueReviews.length > 0 && (
-            <div className="card mb-4 animate-slide" style={{ background:"#fff8e1",border:"1.5px solid var(--amber-500)" }}>
-              <div className={`text-sm font-bold mb-2 ${fk}`} style={{ color:"var(--amber-900)" }}>{t.dueReview}</div>
-              <div className="flex gap-1" style={{ flexWrap:"wrap" }}>
-                {dueReviews.map(r=>(
-                  <span key={r.tag} className={`badge badge-amber ${fk}`} onClick={()=>{setRole("asha"); setTopic(r.tag.includes("AMR")||r.tag==="resistance"?"amr":r.tag);}} style={{ cursor:"pointer" }}>
-                    {r.label[lang] ?? r.tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Role selection */}
-          <h2 className={`text-lg font-bold mb-3 ${fk}`} style={{ color:"var(--primary)" }}>{t.roleSelect}</h2>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24 }}>
-            <button id="role-asha" className={`role-card ${role==="asha"?"selected":""}`} onClick={()=>setRole("asha")}>
-              <div className="role-icon">👩‍⚕️</div>
-              <div className={`role-title ${fk}`}>{t.asha}</div>
-              <div className={`role-desc ${fk}`}>{t.ashaDesc}</div>
-            </button>
-            <button id="role-supervisor" className={`role-card ${role==="supervisor"?"selected":""}`} onClick={()=>setRole("supervisor")}>
-              <div className="role-icon">📊</div>
-              <div className={`role-title ${fk}`}>{t.supervisor}</div>
-              <div className={`role-desc ${fk}`}>{t.supervisorDesc}</div>
-            </button>
           </div>
+        </section>
 
-          {/* ASHA setup */}
-          {role==="asha" && (
-            <div className="card-elevated animate-fade mb-4">
-              <div className="mb-4">
-                <label className={`block text-sm font-medium mb-2 ${fk}`} style={{color:"var(--primary)"}} htmlFor="topic-select">{t.topicLabel}</label>
-                <select id="topic-select" value={topic} onChange={e=>setTopic(e.target.value)}
-                  style={{ width:"100%",padding:"12px 14px",borderRadius:8,border:"2px solid var(--border)",fontSize:"0.95rem",background:"var(--surface)",fontFamily:lang==="kn"?"var(--font-kannada)":"var(--font-sans)" }}>
-                  {t.topics.map(tp=><option key={tp.value} value={tp.value}>{tp.label}</option>)}
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className={`block text-sm font-medium mb-2 ${fk}`} style={{color:"var(--primary)"}}>{t.time}</label>
-                <div className="flex gap-2" style={{ flexWrap:"wrap" }}>
-                  {t.times.map(m=>(
-                    <button key={m} id={`time-${m}`} onClick={()=>setMinutes(m)}
-                      style={{ padding:"8px 16px",borderRadius:8,border:`2px solid ${minutes===m?"var(--primary)":"var(--border)"}`,background:minutes===m?"var(--green-50)":"var(--surface)",color:minutes===m?"var(--primary)":"var(--text)",fontWeight:600,fontSize:"0.9rem",cursor:"pointer",transition:"var(--transition)" }}>
-                      {m}
+        {/* Start a session */}
+        <section id="start" className="section">
+          <div className="wrap">
+            <h2 className={`section-title ${fk}`}>{L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ", "Start a session", "सत्र शुरू करें")}</h2>
+            <p className={`section-sub ${fk}`}>{t.ashaDesc}</p>
+            <div className="start-panel">
+              <div className="card-elevated">
+                <label className={`block text-sm font-bold mb-3 ${fk}`} style={{ color: "var(--primary)" }}>{t.topicLabel}</label>
+                <div className="topic-grid" role="radiogroup" aria-label={t.topicLabel}>
+                  {t.topics.map((tp) => (
+                    <button key={tp.value} id={`topic-${tp.value.replace(" ", "-")}`} role="radio" aria-checked={topic === tp.value}
+                      className={`topic-card ${topic === tp.value ? "on" : ""} ${fk}`} onClick={() => setTopic(tp.value)}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={TOPIC_IMG[tp.value]} alt="" />{tp.label}
                     </button>
                   ))}
                 </div>
-              </div>
-              <button id="start-session-btn" className={`btn btn-primary btn-full btn-lg ${fk}`} onClick={handleStart} disabled={loading}>
-                {loading?<span className="spinner"/>:t.start}
-              </button>
-            </div>
-          )}
-
-          {role==="supervisor" && (
-            <div className="card-elevated animate-fade mb-4">
-              <button id="open-dashboard-btn" className={`btn btn-primary btn-full btn-lg ${fk}`} onClick={()=>router.push(`/dashboard?lang=${lang}`)}>{t.dashboard}</button>
-            </div>
-          )}
-
-          {/* Quick links */}
-          <div className="mb-4">
-            <h3 className={`text-sm font-bold mb-2 text-muted ${fk}`}>{t.quickLinks}</h3>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
-              {[
-                { icon:"🏘️",label:t.visits,path:"/visits" },
-                { icon:"📊",label:lang==="kn"?"ಡ್ಯಾಶ್‌ಬೋರ್ಡ್":lang==="hi"?"डैशबोर्ड":"Dashboard",path:"/dashboard" },
-                { icon:"👤",label:t.profile,path:"/profile" },
-                { icon:"⚙️",label:t.settings,path:"/settings" },
-              ].map(link=>(
-                <button key={link.path} onClick={()=>router.push(link.path)}
-                  className="card" style={{ padding:"12px 8px",textAlign:"center",cursor:"pointer",border:"1.5px solid var(--border)" }}>
-                  <div style={{ fontSize:"1.4rem",marginBottom:4 }}>{link.icon}</div>
-                  <div className={`text-xs font-medium ${fk}`} style={{ color:"var(--primary)" }}>{link.label}</div>
+                <label className={`block text-sm font-bold mt-4 mb-2 ${fk}`} style={{ color: "var(--primary)" }}>{t.time}</label>
+                <div className="flex gap-2">
+                  {t.times.map((m) => (
+                    <button key={m} id={`time-${m}`} className={`time-btn ${minutes === m ? "on" : ""}`} onClick={() => setMinutes(m)}>{m}</button>
+                  ))}
+                </div>
+                <button id="start-session-btn" className={`btn btn-primary btn-full btn-lg mt-4 ${fk}`} onClick={handleStart} disabled={loading}>
+                  {loading ? <span className="spinner" /> : t.start}
                 </button>
-              ))}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {profile ? (
+                  <div className="card" style={{ background: "linear-gradient(135deg,var(--green-50),var(--amber-100))", border: "1.5px solid var(--green-600)" }}>
+                    <div className={`font-bold text-primary ${fk}`}>👋 {t.welcome}, {profile.name}</div>
+                    <div className="text-xs text-muted mt-1">{profile.block}, {profile.district} · {L("ಒಟ್ಟು ಅಧಿವೇಶನ", "Sessions", "कुल सत्र")}: {profile.totalSessions}</div>
+                  </div>
+                ) : (
+                  <div className="card" style={{ border: "1.5px dashed var(--border)", textAlign: "center" }}>
+                    <div className={`text-sm text-muted ${fk}`}>{t.noProfile}</div>
+                    <Link href="/profile" className={`btn btn-primary btn-sm mt-2 ${fk}`}>{t.setupProfile}</Link>
+                  </div>
+                )}
+                {dueReviews.length > 0 && (
+                  <div className="card" style={{ background: "#fff8e1", border: "1.5px solid var(--amber-500)" }}>
+                    <div className={`text-sm font-bold mb-2 ${fk}`} style={{ color: "var(--amber-900)" }}>{t.dueReview}</div>
+                    <div className="flex gap-1" style={{ flexWrap: "wrap" }}>
+                      {dueReviews.map((r) => (
+                        <span key={r.tag} className={`badge badge-amber ${fk}`} style={{ cursor: "pointer" }}
+                          onClick={() => setTopic(r.tag.includes("AMR") || r.tag === "resistance" ? "amr" : r.tag)}>
+                          {r.label[lang] ?? r.tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="card">
+                  <div className={`font-bold text-sm mb-2 ${fk}`} style={{ color: "var(--primary)" }}>📊 {t.supervisor}</div>
+                  <div className={`text-sm text-muted mb-3 ${fk}`}>{t.supervisorDesc}</div>
+                  <Link id="open-dashboard-btn" href="/dashboard" className={`btn btn-outline btn-full ${fk}`}>{t.dashboard}</Link>
+                </div>
+              </div>
             </div>
           </div>
+        </section>
 
-          {/* Disclaimer */}
-          <div style={{ background:"var(--amber-100)",border:"1px solid var(--amber-300)",borderRadius:10,padding:"12px 16px",fontSize:"0.8rem",color:"var(--amber-900)",lineHeight:1.5 }}>
-            <span className={fk}>{t.disclaimer}</span>
-          </div>
-
-          {/* Multi-agent diagram */}
-          <div style={{ marginTop:28 }}>
-            <h3 className={`text-sm font-bold mb-3 text-muted ${fk}`}>
-              🤖 {lang==="kn"?"ಬಹು-ಏಜೆಂಟ್ ಆರ್ಕಿಟೆಕ್ಚರ್":lang==="hi"?"बहु-एजेंट आर्किटेक्चर":"Multi-Agent Architecture"}
-            </h3>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-              {[
-                { icon:"📋", name:{kn:"ಯೋಜನಾ ಏಜೆಂಟ್",en:"Planning Agent",hi:"योजना एजेंट"}, desc:{kn:"ಪಾಠ ಯೋಜನೆ",en:"Lesson planning",hi:"पाठ योजना"} },
-                { icon:"🔍", name:{kn:"ಹುಡುಕಾಟ ಏಜೆಂಟ್",en:"Retrieval Agent",hi:"पुनर्प्राप्ति एजेंट"}, desc:{kn:"ವಿಷಯ ಹುಡುಕಾಟ",en:"Content retrieval",hi:"सामग्री खोज"} },
-                { icon:"📚", name:{kn:"ಶಿಕ್ಷಕ ಏಜೆಂಟ್",en:"Tutor Agent",hi:"ट्यूटर एजेंट"}, desc:{kn:"ರಸಪ್ರಶ್ನೆ ಮತ್ತು ಕಲಿಕೆ",en:"Quiz & teaching",hi:"प्रश्नोत्तरी और शिक्षण"} },
-                { icon:"📝", name:{kn:"ಸಾರಾಂಶ ಏಜೆಂಟ್",en:"Summary Agent",hi:"सारांश एजेंट"}, desc:{kn:"ಸಾರಾಂಶ ಮತ್ತು ಉಲ್ಲೇಖ",en:"Summary & referral",hi:"सारांश और रेफरल"} },
-              ].map(a=>(
-                <div key={a.name.en} className="card" style={{ padding:"14px 12px" }}>
-                  <div style={{ fontSize:"1.3rem",marginBottom:6 }}>{a.icon}</div>
-                  <div className={`text-sm font-bold text-primary ${fk}`}>{a.name[lang]}</div>
-                  <div className={`text-xs text-muted mt-1 ${fk}`}>{a.desc[lang]}</div>
+        {/* How a session works */}
+        <section className="section alt">
+          <div className="wrap">
+            <h2 className={`section-title ${fk}`}>{L("ಅಧಿವೇಶನ ಹೇಗೆ ನಡೆಯುತ್ತದೆ", "How a session works", "सत्र कैसे चलता है")}</h2>
+            <p className={`section-sub ${fk}`}>{L("ನಾಲ್ಕು ತಜ್ಞ ಏಜೆಂಟ್‌ಗಳು; ಸುರಕ್ಷತಾ ನಿಯಂತ್ರಕ ಪ್ರತಿ ಹಂತದಲ್ಲೂ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ.",
+              "Four specialist agents, with a safety controller watching every step.",
+              "चार विशेषज्ञ एजेंट, और हर चरण पर सुरक्षा नियंत्रक।")}</p>
+            <div className="steps4">
+              {steps.map((s, i) => (
+                <div key={s.img} className="step4" style={{ ["--c" as string]: s.c }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <div className="step4-num"><img src={s.img} alt="" /><b>{i + 1}</b></div>
+                  <h3 className={fk}>{s.title}</h3>
+                  <p className={fk}>{s.text}</p>
                 </div>
               ))}
             </div>
           </div>
+        </section>
 
-          <div className="text-center mt-4" style={{ fontSize:"0.72rem",color:"var(--text-muted)" }}>{t.powered}</div>
-        </div>
+        {/* Services */}
+        <section className="section">
+          <div className="wrap">
+            <h2 className={`section-title ${fk}`}>{L("ನೀವು ಏನು ಮಾಡಬಹುದು", "What you can do", "आप क्या कर सकते हैं")}</h2>
+            <p className={`section-sub ${fk}`}>{t.disclaimer}</p>
+            <div className="services">
+              {services.map((s) => (
+                <Link key={s.href} href={s.href} className="service-card">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.img} alt="" />
+                  <h3 className={fk}>{s.title}</h3>
+                  <p className={fk}>{s.text}</p>
+                  <span className="go">→</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Live statistics */}
+        {stats && (
+          <section className="section alt" id="stats">
+            <div className="wrap">
+              <h2 className={`section-title ${fk}`}>{L("ಒಂದು ನೋಟದಲ್ಲಿ", "At a glance", "एक नज़र में")}</h2>
+              <p className={`section-sub ${fk}`}>{L("ಈ ಅಪ್‌ನ ನೇರ ಅಂಕಿ-ಅಂಶಗಳು", "Live figures from this app", "इस ऐप के लाइव आंकड़े")}</p>
+              <div className="stat-band">
+                {[
+                  [stats.sessions, L("ನಡೆಸಿದ ಅಧಿವೇಶನ", "Sessions run", "चलाए गए सत्र")],
+                  [stats.completed, L("ಪೂರ್ಣಗೊಂಡ ಅಧಿವೇಶನ", "Sessions completed", "पूर्ण सत्र")],
+                  [`${stats.avg}%`, L("ಸರಾಸರಿ ರಸಪ್ರಶ್ನೆ ಅಂಕ", "Average quiz score", "औसत प्रश्नोत्तरी स्कोर")],
+                  [stats.lessons, L("ಅನುಮೋದಿತ ಪಾಠಗಳು", "Approved lessons", "स्वीकृत पाठ")],
+                ].map(([n, l]) => (
+                  <div key={String(l)} className="stat-box"><div className="n">{n}</div><div className={`l ${fk}`}>{l}</div></div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Helplines */}
+        <section className="section">
+          <div className="wrap">
+            <h2 className={`section-title ${fk}`}>{L("ತಕ್ಷಣ ಸಹಾಯ ಬೇಕೆ?", "Need help now?", "अभी मदद चाहिए?")}</h2>
+            <div className="help-grid" style={{ marginTop: 24 }}>
+              <a href="tel:104" className="help-card h104"><span className="num">104</span><span className={fk}>{L("ಆರೋಗ್ಯ ಸಹಾಯವಾಣಿ", "Health helpline", "स्वास्थ्य हेल्पलाइन")}</span></a>
+              <a href="tel:108" className="help-card h108"><span className="num">108</span><span className={fk}>{L("ತುರ್ತು ಆಂಬ್ಯುಲೆನ್ಸ್", "Emergency ambulance", "आपातकालीन एम्बुलेंस")}</span></a>
+              <div className={`help-card note ${fk}`}>{L(
+                "ವ್ಯಕ್ತಿಗತ ಅಥವಾ ತುರ್ತು ಆರೋಗ್ಯ ಪ್ರಶ್ನೆಗಳಿಗೆ ಅಪ್ ಉತ್ತರಿಸುವುದಿಲ್ಲ. 104 ಗೆ ಕರೆ ಮಾಡಿ, ತುರ್ತು ಸಂದರ್ಭದಲ್ಲಿ 108, ಅಥವಾ ANM ಅವರನ್ನು ಸಂಪರ್ಕಿಸಿ.",
+                "The app does not answer personal or urgent health questions. Call 104, or 108 in an emergency, or contact the ANM.",
+                "व्यक्तिगत या तत्काल स्वास्थ्य प्रश्नों का उत्तर ऐप नहीं देता। 104 पर कॉल करें, आपात स्थिति में 108, या ANM से संपर्क करें।")}</div>
+            </div>
+          </div>
+        </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

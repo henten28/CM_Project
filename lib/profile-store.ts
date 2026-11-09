@@ -25,7 +25,8 @@ export function getProfile(): AshaProfile | null {
   }
 }
 
-export function saveProfile(data: Omit<AshaProfile, "id" | "createdAt" | "totalSessions" | "totalVisits">): AshaProfile {
+// counters are optional so incrementSessions/incrementVisits can pass them through
+export function saveProfile(data: Omit<AshaProfile, "id" | "createdAt" | "totalSessions" | "totalVisits"> & Partial<Pick<AshaProfile, "totalSessions" | "totalVisits">>): AshaProfile {
   const existing = getProfile();
   const profile: AshaProfile = {
     id: existing?.id ?? `asha-${Date.now()}`,
