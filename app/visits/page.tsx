@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useLang } from "@/lib/prefs";
+import { SiteHeader, SiteFooter, PageBanner } from "@/components/SiteChrome";
 import { getVisits, addVisit, deleteVisit, visitsToCSV, type Visit } from "@/lib/visit-tracker";
-import { getProfile } from "@/lib/profile-store";
 import { KA_DISTRICTS } from "@/lib/profile-store";
 
 const TOPICS = [
@@ -16,8 +16,7 @@ const TOPICS = [
 ];
 
 export default function VisitsPage() {
-  const router = useRouter();
-  const [lang, setLang] = useState<"kn" | "en" | "hi">("kn");
+  const [lang] = useLang();  // shared, saved preference; changed from the site header
   const [visits, setVisits] = useState<Visit[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -28,8 +27,6 @@ export default function VisitsPage() {
 
   useEffect(() => {
     setVisits(getVisits());
-    const p = getProfile();
-    if (p) setLang(p.lang);
   }, []);
 
   function f(kn: string, en: string, hi: string) {
@@ -65,113 +62,92 @@ export default function VisitsPage() {
   }
 
   const outcomeColor = { completed: "badge-green", partial: "badge-amber", referred: "badge-sky" };
+  const outcomeLabel = { completed: f("ಪೂರ್ಣ", "Completed", "पूर्ण"), partial: f("ಅಂಶಶಃ", "Partial", "आंशिक"), referred: f("ಉಲ್ಲೇಖ", "Referred", "संदर्भित") };
+  // topic picture for each visit (original illustrations in public/img)
+  const topicImg: Record<string, string> = { general: "/img/step3.svg", antibiotics: "/img/m1.svg", amr: "/img/m2.svg", prevention: "/img/m6.svg", sharing: "/img/m4.svg", "case study": "/img/m7.svg" };
+  const families = new Set(visits.map((v) => `${v.familyName.trim().toLowerCase()}|${v.village.trim().toLowerCase()}`)).size;
+  const scored = visits.filter((v) => v.quizScore != null);
+  const avgScore = scored.length ? Math.round(scored.reduce((n, v) => n + (v.quizScore ?? 0), 0) / scored.length) : null;
+  const referred = visits.filter((v) => v.outcome === "referred").length;
+  const scoreStyle = (n: number) => ({ background: n >= 80 ? "var(--green-50)" : n >= 60 ? "#fff3cd" : "var(--red-100)", color: n >= 80 ? "var(--green-800)" : n >= 60 ? "var(--amber-900)" : "var(--red-600)" });
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <header className="app-header">
-        <div className="logo">
-          <div className="logo-icon">A</div>
-          <div>
-            <div className="logo-text">AMR ಜಾಗೃತಿ</div>
-            <div className={`logo-sub ${fk}`}>{f("ಮನೆ ಭೇಟಿ ಟ್ರ್ಯಾಕರ್", "Visit Tracker", "घर भ्रमण ट्रैकर")}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="lang-toggle">
-            {(["kn","en","hi"] as const).map((l) => (
-              <button key={l} className={lang === l ? "active" : ""} onClick={() => setLang(l)}>
-                {l === "kn" ? "ಕನ್ನಡ" : l === "en" ? "EN" : "हिं"}
-              </button>
-            ))}
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={() => router.push("/")}>← {f("ಮನೆ", "Home", "होम")}</button>
-        </div>
-      </header>
+    <div className="portal portal-page">
+      <SiteHeader />
+      <PageBanner img="/img/m5.svg" title={f("ಮನೆ ಭೇಟಿಗಳು", "Household Visits", "घरेलू दौरे")}
+        sub={f("ನೀವು ಭೇಟಿ ನೀಡಿದ ಪ್ರತಿ ಕುಟುಂಬ, ಕಲಿಸಿದ ವಿಷಯ ಮತ್ತು ಫಲಿತಾಂಶವನ್ನು ದಾಖಲಿಸಿ. ಈ ಸಾಧನದಲ್ಲಿ ಉಳಿಯುತ್ತದೆ.",
+               "Log each family you visit, the topic you covered and the outcome. Saved on this device.",
+               "हर परिवार का दौरा, सिखाया गया विषय और परिणाम दर्ज करें। इस डिवाइस पर सहेजा जाता है।")}>
+        {visits.length > 0 && <button id="export-csv-btn" className="btn btn-outline" onClick={handleExport}>📥 CSV</button>}
+        <button id="add-visit-btn" className={`btn btn-primary ${fk}`} onClick={() => setShowForm(!showForm)}>+ {f("ಭೇಟಿ ಸೇರಿಸಿ", "Add Visit", "दौरा जोड़ें")}</button>
+      </PageBanner>
 
-      <main style={{ maxWidth: 700, margin: "0 auto", padding: "20px 16px 40px" }}>
-        {/* Actions row */}
-        <div className="flex justify-between items-center mb-4">
-          <h1 className={`text-lg font-bold text-primary ${fk}`}>
-            🏘️ {f("ಮನೆ ಭೇಟಿಗಳು", "Household Visits", "घरेलू दौरे")} ({visits.length})
-          </h1>
-          <div className="flex gap-2">
-            {visits.length > 0 && (
-              <button id="export-csv-btn" className="btn btn-outline btn-sm" onClick={handleExport}>
-                📥 CSV
-              </button>
-            )}
-            <button id="add-visit-btn" className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
-              + {f("ಭೇಟಿ ಸೇರಿಸಿ", "Add Visit", "दौरा जोड़ें")}
-            </button>
-          </div>
+      <main className="page-body">
+        <div className="mini-stats">
+          {[
+            { icon: "🏘️", bg: "#e3eefc", val: visits.length, label: f("ಒಟ್ಟು ಭೇಟಿಗಳು", "Visits logged", "कुल दौरे") },
+            { icon: "👪", bg: "#fde2e4", val: families, label: f("ಕುಟುಂಬಗಳು", "Families reached", "परिवार") },
+            { icon: "🧠", bg: "#d8f3dc", val: avgScore === null ? "—" : `${avgScore}%`, label: f("ಸರಾಸರಿ ಅಂಕ", "Average quiz score", "औसत स्कोर") },
+            { icon: "🏥", bg: "#fff3cd", val: referred, label: f("ಉಲ್ಲೇಖಿಸಿದ", "Referred", "संदर्भित") },
+          ].map((m) => (
+            <div key={m.label} className="mini-stat">
+              <span className="ms-icon" style={{ background: m.bg }}>{m.icon}</span>
+              <div><div className="ms-val">{m.val}</div><div className={`ms-label ${fk}`}>{m.label}</div></div>
+            </div>
+          ))}
         </div>
 
-        {/* Add Visit Form */}
+        {/* Add visit form */}
         {showForm && (
           <div className="card-elevated mb-4 animate-slide">
-            <h3 className={`font-bold mb-3 text-primary ${fk}`}>{f("ಹೊಸ ಭೇಟಿ ದಾಖಲಿಸಿ", "Log New Visit", "नया दौरा लॉग करें")}</h3>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              {[
-                { label: f("ಕುಟುಂಬ ಹೆಸರು", "Family Name", "परिवार का नाम"), val: form.familyName, key: "familyName" as const, ph: f("ಕುಟುಂಬ ಹೆಸರು", "Family name", "परिवार नाम") },
-                { label: f("ಗ್ರಾಮ/ವಾರ್ಡ್", "Village / Ward", "गाँव / वार्ड"), val: form.village, key: "village" as const, ph: f("ಗ್ರಾಮ", "Village", "गाँव") },
-              ].map((field) => (
-                <div key={field.key}>
-                  <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{field.label}</label>
-                  <input value={field.val} placeholder={field.ph}
-                    onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-                    style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)", fontFamily: lang === "kn" ? "var(--font-kannada)" : "inherit" }} />
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              <div>
-                <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{f("ಜಿಲ್ಲೆ", "District", "जिला")}</label>
-                <select value={form.district} onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
-                  style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)" }}>
+            <h2 className={`card-title ${fk}`}>📝 {f("ಹೊಸ ಭೇಟಿ ದಾಖಲಿಸಿ", "Log New Visit", "नया दौरा लॉग करें")}</h2>
+            <div className="form-grid">
+              <div className="field">
+                <label className={fk} htmlFor="visit-family">{f("ಕುಟುಂಬ ಹೆಸರು", "Family Name", "परिवार का नाम")}</label>
+                <input id="visit-family" className={fk} value={form.familyName} placeholder={f("ಕುಟುಂಬ ಹೆಸರು", "Family name", "परिवार नाम")}
+                  onChange={(e) => setForm((x) => ({ ...x, familyName: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label className={fk} htmlFor="visit-village">{f("ಗ್ರಾಮ/ವಾರ್ಡ್", "Village / Ward", "गाँव / वार्ड")}</label>
+                <input id="visit-village" className={fk} value={form.village} placeholder={f("ಗ್ರಾಮ", "Village", "गाँव")}
+                  onChange={(e) => setForm((x) => ({ ...x, village: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label className={fk} htmlFor="visit-district">{f("ಜಿಲ್ಲೆ", "District", "जिला")}</label>
+                <select id="visit-district" value={form.district} onChange={(e) => setForm((x) => ({ ...x, district: e.target.value }))}>
                   {KA_DISTRICTS.map((d) => <option key={d}>{d}</option>)}
                 </select>
               </div>
-              <div>
-                <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{f("ವಿಷಯ", "Topic", "विषय")}</label>
-                <select value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
-                  style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)", fontFamily: lang === "kn" ? "var(--font-kannada)" : "inherit" }}>
+              <div className="field">
+                <label className={fk} htmlFor="visit-topic">{f("ವಿಷಯ", "Topic", "विषय")}</label>
+                <select id="visit-topic" className={fk} value={form.topic} onChange={(e) => setForm((x) => ({ ...x, topic: e.target.value }))}>
                   {TOPICS.map((t) => <option key={t.value} value={t.value}>{lang === "kn" ? t.kn : lang === "hi" ? t.hi : t.en}</option>)}
                 </select>
               </div>
             </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-              <div>
-                <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{f("ಸಮಯ (ನಿ.)", "Duration (min)", "समय (मिनट)")}</label>
-                <input type="number" value={form.durationMin} min={5} max={90}
-                  onChange={(e) => setForm((f) => ({ ...f, durationMin: Number(e.target.value) }))}
-                  style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)" }} />
+            <div className="form-grid">
+              <div className="field">
+                <label className={fk} htmlFor="visit-duration">{f("ಸಮಯ (ನಿ.)", "Duration (min)", "समय (मिनट)")}</label>
+                <input id="visit-duration" type="number" value={form.durationMin} min={5} max={90} onChange={(e) => setForm((x) => ({ ...x, durationMin: Number(e.target.value) }))} />
               </div>
-              <div>
-                <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{f("ಅಂಕ (%)", "Quiz Score (%)", "स्कोर (%)")}</label>
-                <input type="number" value={form.quizScore} min={0} max={100}
-                  onChange={(e) => setForm((f) => ({ ...f, quizScore: Number(e.target.value) }))}
-                  style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)" }} />
+              <div className="field">
+                <label className={fk} htmlFor="visit-score">{f("ಅಂಕ (%)", "Quiz Score (%)", "स्कोर (%)")}</label>
+                <input id="visit-score" type="number" value={form.quizScore} min={0} max={100} onChange={(e) => setForm((x) => ({ ...x, quizScore: Number(e.target.value) }))} />
               </div>
-              <div>
-                <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{f("ಫಲಿತಾಂಶ", "Outcome", "परिणाम")}</label>
-                <select value={form.outcome} onChange={(e) => setForm((f) => ({ ...f, outcome: e.target.value as Visit["outcome"] }))}
-                  style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)", fontFamily: lang === "kn" ? "var(--font-kannada)" : "inherit" }}>
-                  <option value="completed">{f("ಪೂರ್ಣ", "Completed", "पूर्ण")}</option>
-                  <option value="partial">{f("ಅಂಶಶಃ", "Partial", "आंशिक")}</option>
-                  <option value="referred">{f("ಉಲ್ಲೇಖ", "Referred", "संदर्भित")}</option>
+              <div className="field">
+                <label className={fk} htmlFor="visit-outcome">{f("ಫಲಿತಾಂಶ", "Outcome", "परिणाम")}</label>
+                <select id="visit-outcome" className={fk} value={form.outcome} onChange={(e) => setForm((x) => ({ ...x, outcome: e.target.value as Visit["outcome"] }))}>
+                  <option value="completed">{outcomeLabel.completed}</option>
+                  <option value="partial">{outcomeLabel.partial}</option>
+                  <option value="referred">{outcomeLabel.referred}</option>
                 </select>
               </div>
             </div>
-
-            <div className="mb-4">
-              <label className={`block text-xs font-medium mb-1 text-muted ${fk}`}>{f("ಟಿಪ್ಪಣಿಗಳು", "Notes", "नोट्स")}</label>
-              <textarea value={form.notes} rows={2} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder={f("ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ…", "Additional notes…", "अतिरिक्त नोट्स…")}
-                style={{ width: "100%", padding: "9px 12px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.9rem", background: "var(--surface)", fontFamily: lang === "kn" ? "var(--font-kannada)" : "inherit", resize: "none" }} />
+            <div className="field mb-4">
+              <label className={fk} htmlFor="visit-notes">{f("ಟಿಪ್ಪಣಿಗಳು", "Notes", "नोट्स")}</label>
+              <textarea id="visit-notes" className={fk} value={form.notes} rows={2} style={{ resize: "none" }}
+                onChange={(e) => setForm((x) => ({ ...x, notes: e.target.value }))} placeholder={f("ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ…", "Additional notes…", "अतिरिक्त नोट्स…")} />
             </div>
-
             <div className="flex gap-2">
               <button id="submit-visit-btn" className={`btn btn-primary flex-1 ${fk}`} onClick={handleAdd} disabled={!form.familyName.trim() || !form.village.trim()}>
                 {f("ದಾಖಲಿಸಿ", "Log Visit", "दर्ज करें")}
@@ -183,34 +159,37 @@ export default function VisitsPage() {
 
         {/* Visit list */}
         {visits.length === 0 ? (
-          <div className="card text-center" style={{ padding: "40px 20px" }}>
-            <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🏘️</div>
-            <p className={`text-muted ${fk}`}>{f("ಇನ್ನೂ ಯಾವ ಭೇಟಿ ದಾಖಲಿಸಿಲ್ಲ", "No visits logged yet", "अभी तक कोई दौरा लॉग नहीं")}</p>
-            <button className="btn btn-primary mt-3" onClick={() => setShowForm(true)}>+ {f("ಮೊದಲ ಭೇಟಿ ಸೇರಿಸಿ", "Add First Visit", "पहला दौरा जोड़ें")}</button>
-          </div>
-        ) : (
-          visits.map((v) => (
-            <div key={v.id} className="session-history-item">
-              <div className="shi-icon">🏠</div>
-              <div className="shi-info">
-                <div className={`shi-title ${v.lang === "kn" ? "kn" : ""}`}>{v.familyName} — {v.village}</div>
-                <div className="shi-meta">{v.date} · {v.district} · {v.durationMin} min
-                  <span className={`badge ${outcomeColor[v.outcome]} ml-2`} style={{ fontSize: "0.68rem" }}>{v.outcome}</span>
-                </div>
-                {v.notes && <div className="text-xs text-muted mt-1">{v.notes}</div>}
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                {v.quizScore != null && (
-                  <div style={{ fontWeight: 700, fontSize: "0.9rem", color: v.quizScore >= 80 ? "var(--green-700)" : v.quizScore >= 60 ? "var(--amber-700)" : "var(--red-600)" }}>
-                    {v.quizScore}%
-                  </div>
-                )}
-                <button onClick={() => handleDelete(v.id)} style={{ fontSize: "1rem", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", marginTop: 4 }}>🗑️</button>
-              </div>
+          !showForm && (
+            <div className="empty-state">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/hero.svg" alt="" />
+              <p className={`text-muted ${fk}`}>{f("ಇನ್ನೂ ಯಾವ ಭೇಟಿ ದಾಖಲಿಸಿಲ್ಲ", "No visits logged yet", "अभी तक कोई दौरा लॉग नहीं")}</p>
+              <button className={`btn btn-primary mt-3 ${fk}`} onClick={() => setShowForm(true)}>+ {f("ಮೊದಲ ಭೇಟಿ ಸೇರಿಸಿ", "Add First Visit", "पहला दौरा जोड़ें")}</button>
             </div>
-          ))
+          )
+        ) : (
+          <div className="visit-grid">
+            {visits.map((v) => (
+              <div key={v.id} className="visit-card">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={topicImg[v.topic] ?? "/img/step3.svg"} alt="" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 className={v.lang === "kn" ? "kn" : ""}>{v.familyName} · {v.village}</h3>
+                  <div className={`vc-meta ${v.lang === "kn" ? "kn" : ""}`}>{v.topicLabel}</div>
+                  <div className="vc-meta">📅 {v.date} · 📍 {v.district} · ⏱ {v.durationMin} min</div>
+                  <div className="flex gap-2 mt-2 items-center" style={{ flexWrap: "wrap" }}>
+                    <span className={`badge ${outcomeColor[v.outcome]} ${fk}`}>{outcomeLabel[v.outcome]}</span>
+                    {v.quizScore != null && <span className="score-pill" style={scoreStyle(v.quizScore)}>{v.quizScore}%</span>}
+                  </div>
+                  {v.notes && <div className="vc-meta mt-1">{v.notes}</div>}
+                </div>
+                <button className="icon-btn" aria-label={f("ಅಳಿಸಿ", "Delete", "हटाएं")} onClick={() => handleDelete(v.id)}>🗑️</button>
+              </div>
+            ))}
+          </div>
         )}
       </main>
+      <SiteFooter />
     </div>
   );
 }

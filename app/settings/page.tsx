@@ -1,17 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { getHealth, type Health } from "@/lib/api-client";
+import { useLang, useTextSize, tr, type Lang } from "@/lib/prefs";
+import { SiteHeader, SiteFooter, PageBanner } from "@/components/SiteChrome";
 
 // old versions of this page stored API keys / AWS tokens in the browser; remove them
 const LEGACY_KEY = "amr_llm_config";
 
 export default function SettingsPage() {
-  const router = useRouter();
+  const [lang, setLang] = useLang();
+  const [size, setSize] = useTextSize();
   const [health, setHealth] = useState<Health | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const L = (kn: string, en: string, hi: string) => tr(lang, kn, en, hi);
+  const fk = lang === "kn" ? "kn" : "";
 
   // state is only set in promise callbacks, which is what the react-hooks lint rule expects
   const check = useCallback(() => {
@@ -29,35 +33,58 @@ export default function SettingsPage() {
   const row = { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: "0.88rem" } as const;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <header className="app-header">
-        <div className="logo">
-          <div className="logo-icon">A</div>
-          <div><div className="logo-text">AMR ಜಾಗೃತಿ</div><div className="logo-sub">Settings</div></div>
+    <div className="portal portal-page">
+      <SiteHeader />
+      <PageBanner img="/img/step1.svg" title={L("ಸೆಟ್ಟಿಂಗ್ಸ್", "Settings", "सेटिंग्स")}
+        sub={L("ಭಾಷೆ, ಅಕ್ಷರ ಗಾತ್ರ ಮತ್ತು ಬ್ಯಾಕೆಂಡ್ ಸಂಪರ್ಕ.", "Language, text size and the backend connection.", "भाषा, अक्षर आकार और बैकएंड कनेक्शन।")} />
+      <main className="page-body" style={{ maxWidth: 760 }}>
+
+        {/* Display preferences: saved in this browser and used on every page */}
+        <div className="card-elevated mb-4">
+          <h3 className={`font-bold text-sm mb-3 ${fk}`} style={{ color: "var(--primary)" }}>{L("ಪ್ರದರ್ಶನ", "Display", "प्रदर्शन")}</h3>
+          <div style={row}>
+            <span className={`text-muted ${fk}`}>{L("ಭಾಷೆ", "Language", "भाषा")}</span>
+            <div className="seg">
+              {(["kn", "en", "hi"] as Lang[]).map((l) => (
+                <button key={l} id={`settings-lang-${l}`} aria-pressed={lang === l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>
+                  {l === "kn" ? "ಕನ್ನಡ" : l === "en" ? "English" : "हिंदी"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ ...row, borderBottom: "none" }}>
+            <span className={`text-muted ${fk}`}>{L("ಅಕ್ಷರ ಗಾತ್ರ", "Text size", "अक्षर आकार")}</span>
+            <div className="seg">
+              {(["sm", "md", "lg"] as const).map((s) => (
+                <button key={s} aria-pressed={size === s} className={size === s ? "on" : ""} onClick={() => setSize(s)}>{s === "sm" ? "A−" : s === "md" ? "A" : "A+"}</button>
+              ))}
+            </div>
+          </div>
+          <p className={`text-xs text-muted mt-2 ${fk}`}>{L(
+            "ಈ ಆಯ್ಕೆಗಳು ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಉಳಿಯುತ್ತವೆ ಮತ್ತು ಎಲ್ಲಾ ಪುಟಗಳಿಗೂ ಅನ್ವಯಿಸುತ್ತವೆ.",
+            "These choices are saved in this browser and apply on every page.",
+            "ये विकल्प इस ब्राउज़र में सहेजे जाते हैं और हर पेज पर लागू होते हैं।")}</p>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => router.push("/")}>← Home</button>
-      </header>
 
-      <main style={{ maxWidth: 540, margin: "0 auto", padding: "28px 16px" }}>
-        <h1 className="text-xl font-bold text-primary mb-1">⚙️ Backend connection</h1>
-        <p className="text-sm text-muted mb-4">
-          All agents run on the AMR Jagruti backend. AWS credentials are configured on the server only and are never entered or stored in this app.
-        </p>
-
+        {/* Backend connection */}
         <div className="card-elevated mb-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm" style={{ color: "var(--primary)" }}>Status</h3>
+            <h3 className={`font-bold text-sm ${fk}`} style={{ color: "var(--primary)" }}>{L("ಬ್ಯಾಕೆಂಡ್ ಸಂಪರ್ಕ", "Backend connection", "बैकएंड कनेक्शन")}</h3>
             <span id="backend-status" className={`badge ${health === null ? "badge-amber" : up ? "badge-green" : "badge-red"}`}>
               {health === null ? "Checking…" : up ? "● Connected" : "● Unreachable"}
             </span>
           </div>
+          <p className={`text-sm text-muted mb-3 ${fk}`}>{L(
+            "ಎಲ್ಲಾ ಏಜೆಂಟ್‌ಗಳು ಬ್ಯಾಕೆಂಡ್‌ನಲ್ಲಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ. AWS ಕೀಗಳು ಸರ್ವರ್‌ನಲ್ಲಿ ಮಾತ್ರ ಇರುತ್ತವೆ, ಈ ಅಪ್‌ನಲ್ಲಿ ಎಂದಿಗೂ ನಮೂದಿಸಲಾಗುವುದಿಲ್ಲ.",
+            "All agents run on the AMR Jagruti backend. AWS credentials are configured on the server only and are never entered or stored in this app.",
+            "सभी एजेंट बैकएंड पर चलते हैं। AWS कुंजियां केवल सर्वर पर रहती हैं और इस ऐप में कभी दर्ज नहीं की जातीं।")}</p>
 
           {up && (
             <div>
-              <div style={row}><span className="text-muted">Agent mode</span>
+              <div style={row}><span className="text-muted">{L("ಏಜೆಂಟ್ ಮೋಡ್", "Agent mode", "एजेंट मोड")}</span>
                 <strong>{health?.mock ? "🎭 Mock (no AWS credentials on server)" : "☁️ Amazon Bedrock"}</strong></div>
-              <div style={row}><span className="text-muted">AWS region</span><strong id="aws-region">{health?.region ?? "—"}</strong></div>
-              <div style={{ ...row, borderBottom: "none" }}><span className="text-muted">Model</span>
+              <div style={row}><span className="text-muted">{L("AWS ಪ್ರದೇಶ", "AWS region", "AWS क्षेत्र")}</span><strong id="aws-region">{health?.region ?? "—"}</strong></div>
+              <div style={{ ...row, borderBottom: "none" }}><span className="text-muted">{L("ಮಾದರಿ", "Model", "मॉडल")}</span>
                 <strong style={{ fontSize: "0.8rem", wordBreak: "break-all", textAlign: "right", marginLeft: 12 }}>{health?.model ?? "—"}</strong></div>
             </div>
           )}
@@ -70,9 +97,9 @@ export default function SettingsPage() {
           )}
 
           <button id="recheck-btn" className="btn btn-outline btn-full mt-3" onClick={() => { setChecking(true); check(); }} disabled={checking}>
-            {checking ? <span className="spinner" /> : "↻ Check again"}
+            {checking ? <span className="spinner" /> : `↻ ${L("ಮತ್ತೆ ಪರಿಶೀಲಿಸಿ", "Check again", "फिर से जांचें")}`}
           </button>
-          {checkedAt && <div className="text-xs text-muted mt-1 text-center">Last checked {checkedAt}</div>}
+          {checkedAt && <div className="text-xs text-muted mt-1 text-center">{L("ಕೊನೆಯ ಪರಿಶೀಲನೆ", "Last checked", "अंतिम जांच")} {checkedAt}</div>}
         </div>
 
         <div className="card mb-4" style={{ fontSize: "0.82rem" }}>
@@ -84,6 +111,7 @@ export default function SettingsPage() {
           </ul>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

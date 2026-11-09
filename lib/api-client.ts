@@ -74,6 +74,7 @@ export interface EscalationTask {
   status: "open" | "closed";
   simulated: boolean;
   createdAt: string;
+  closedAt: string | null;
 }
 
 export interface SessionSummary {
@@ -120,7 +121,8 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
   if (!res.ok) {
     // FastAPI puts errors in `detail` (a string, or a list of validation errors)
     const d = (data as { detail?: unknown }).detail;
-    throw new ApiError(res.status, typeof d === "string" ? d : JSON.stringify(d ?? data));
+    // non-JSON bodies (e.g. a restarting server) fall back to the HTTP status
+    throw new ApiError(res.status, typeof d === "string" ? d : d ? JSON.stringify(d) : `HTTP ${res.status} ${res.statusText}`);
   }
   return data as T;
 }
@@ -158,6 +160,66 @@ export function completeSession(sessionId: string) {
 
 export function getHealth() {
   return call<Health>("/api/health");
+}
+
+export function resumeSession(sessionId: string) {
+  return call<{ sessionId: string; state: SessionState; content: RetrievalResult; questions: QuizItem[];
+                progress: { scorePercent: number; answered: number; correct: number; level: Level | null } }>(
+    "/api/session/step", { sessionId, action: "resume" });
+}
+
+// ── supervisor dashboard ─────────────────────────────────────────────────────
+
+export interface DashboardSession {
+  id: string; topic: string; lang: Lang; state: SessionState; date: string; createdAt: string; durationMin: number;
+  quizScore: number; totalQ: number; correctQ: number; gaps: string[];
+  safetyRouted: boolean; openTasks: number; lessonPlanValid: boolean | null; planSource: "llm" | "rules" | null;
+  sessionCompleted: boolean;
+}
+
+export interface ReferralTask extends EscalationTask { sessionId: string; topic: string; lang: Lang; }
+
+export interface Metric { numerator: number; denominator: number; percent: number | null; }
+
+export interface EvaluationReport {
+  generatedAt: string; mode: "mock" | "bedrock"; model: string | null; contentVersion: string;
+  metrics: { testPassRate: Metric; safetyRoutingAccuracy: Metric; safetyFalsePositives: Metric;
+             aiPlansPassingValidation: Metric; fullSessionsCompleted: Metric };
+  scenarios: { id: string; type: string; title: string; passed: boolean; detail: string }[];
+}
+
+export function getDashboardSessions() {
+  return call<DashboardSession[]>("/api/dashboard/sessions");
+}
+
+export function getReferralTasks(status: "open" | "closed" | "all" = "open") {
+  return call<ReferralTask[]>(`/api/dashboard/tasks?status=${status}`);
+}
+
+export function closeReferralTask(taskId: string) {
+  return call<EscalationTask>(`/api/dashboard/tasks/${encodeURIComponent(taskId)}/close`, {});
+}
+
+export function getEvaluation() {
+  return call<EvaluationReport | null>("/api/dashboard/evaluation");
+}
+
+// ── learning library ─────────────────────────────────────────────────────────
+
+export interface LibraryBlock {
+  id: string; title: Bilingual; body: Bilingual; conceptTags: string[]; difficulty: string;
+  estimatedMinutes: number; sourceId: string; source: string; version: number;
+}
+
+export interface ContentLibrary {
+  contentVersion: string;
+  sources: { id: string; name: string }[];
+  modules: { id: string; title: Bilingual; estimatedMinutes: number; blocks: LibraryBlock[] }[];
+  keyMessages: { id: string; conceptTag: string; text: Bilingual }[];
+}
+
+export function getContentLibrary() {
+  return call<ContentLibrary>("/api/content");
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

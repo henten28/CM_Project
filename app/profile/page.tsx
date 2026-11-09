@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getProfile, saveProfile, clearProfile, KA_DISTRICTS, type AshaProfile } from "@/lib/profile-store";
+import { useLang, getLang } from "@/lib/prefs";
+import { SiteHeader, SiteFooter, PageBanner } from "@/components/SiteChrome";
+import { tr } from "@/lib/prefs";
 
 const T = {
   kn: {
@@ -60,7 +63,7 @@ const T = {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [uiLang, setUiLang] = useState<"kn" | "en" | "hi">("kn");
+  const [uiLang, setAppLang] = useLang();  // shared, saved app language
   const [profile, setProfile] = useState<AshaProfile | null>(null);
   const [name, setName] = useState("");
   const [block, setBlock] = useState("");
@@ -76,7 +79,8 @@ export default function ProfilePage() {
       setBlock(p.block);
       setDistrict(p.district);
       setLang(p.lang);
-      setUiLang(p.lang);
+    } else {
+      setLang(getLang());  // a new profile starts with the language already chosen in the app
     }
   }, []);
 
@@ -86,6 +90,7 @@ export default function ProfilePage() {
   function handleSave() {
     if (!name.trim()) return;
     const p = saveProfile({ name: name.trim(), block: block.trim(), district, lang });
+    setAppLang(lang);  // the preferred language chosen here becomes the app language
     setProfile(p);
     setSaved(true);
     setTimeout(() => { setSaved(false); router.push("/"); }, 1200);
@@ -99,101 +104,85 @@ export default function ProfilePage() {
     }
   }
 
+  const L = (kn: string, en: string, hi: string) => tr(uiLang, kn, en, hi);
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <header className="app-header">
-        <div className="logo">
-          <div className="logo-icon">A</div>
-          <div>
-            <div className="logo-text">AMR ಜಾಗೃತಿ</div>
-            <div className="logo-sub">Profile</div>
-          </div>
-        </div>
-        <div className="lang-toggle">
-          {(["kn","en","hi"] as const).map((l) => (
-            <button key={l} id={`ui-lang-${l}`} className={uiLang === l ? "active" : ""} onClick={() => setUiLang(l)}>
-              {l === "kn" ? "ಕನ್ನಡ" : l === "en" ? "EN" : "हिं"}
-            </button>
-          ))}
-        </div>
-      </header>
+    <div className="portal portal-page">
+      <SiteHeader />
+      <PageBanner img="/img/step2.svg" title={t.title}
+        sub={profile ? `👋 ${profile.name} · ${profile.block ? profile.block + ", " : ""}${profile.district}` : t.sub} />
 
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: "28px 16px" }}>
-        {/* Avatar */}
-        <div className="text-center mb-4">
-          <div style={{
-            width: 80, height: 80, borderRadius: "50%",
-            background: "linear-gradient(135deg, var(--green-700), var(--green-900))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "2.2rem", margin: "0 auto 12px",
-          }}>👩‍⚕️</div>
-          <h1 className={`text-xl font-bold text-primary ${fontClass}`}>{t.title}</h1>
-          <p className={`text-sm text-muted mt-1 ${fontClass}`}>{t.sub}</p>
-        </div>
-
-        {/* Stats (if existing profile) */}
-        {profile && (
-          <div className="card mb-4">
-            <h3 className={`font-bold text-sm text-primary mb-3 ${fontClass}`}>{t.stats}</h3>
-            <div className="stat-grid">
-              <div className="stat-card">
-                <div className="stat-val">{profile.totalSessions}</div>
-                <div className={`stat-label ${fontClass}`}>{t.sessions}</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-val">{profile.totalVisits}</div>
-                <div className={`stat-label ${fontClass}`}>{t.visits}</div>
-              </div>
-            </div>
-            <div className="text-xs text-muted mt-3 text-center">
-              {t.since}: {new Date(profile.createdAt).toLocaleDateString("en-IN")}
-            </div>
-          </div>
-        )}
-
-        {/* Form */}
-        <div className="card-elevated">
-          {[
-            { label: t.name, value: name, onChange: setName, ph: t.namePh, id: "input-name" },
-            { label: t.block, value: block, onChange: setBlock, ph: t.blockPh, id: "input-block" },
-          ].map((f) => (
-            <div key={f.id} className="mb-4">
-              <label className={`block text-sm font-medium mb-1 text-primary ${fontClass}`} htmlFor={f.id}>{f.label}</label>
-              <input id={f.id} value={f.value} onChange={(e) => f.onChange(e.target.value)}
-                placeholder={f.ph}
-                style={{ width: "100%", padding: "11px 14px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.95rem", fontFamily: uiLang === "kn" ? "var(--font-kannada)" : "inherit", background: "var(--surface)" }} />
-            </div>
-          ))}
-
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-1 text-primary ${fontClass}`} htmlFor="district-select">{t.district}</label>
-            <select id="district-select" value={district} onChange={(e) => setDistrict(e.target.value)}
-              style={{ width: "100%", padding: "11px 14px", border: "2px solid var(--border)", borderRadius: 8, fontSize: "0.95rem", background: "var(--surface)" }}>
-              {KA_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-2 text-primary ${fontClass}`}>{t.lang}</label>
-            <div className="flex gap-2">
-              {([["kn","ಕನ್ನಡ"],["en","English"],["hi","हिंदी"]] as const).map(([l, label]) => (
-                <button key={l} id={`pref-lang-${l}`} onClick={() => setLang(l)}
-                  className={`btn btn-sm flex-1 ${lang === l ? "btn-primary" : "btn-outline"}`}>{label}</button>
+      <main className="page-body">
+        <div className="profile-grid">
+          {/* Form */}
+          <div className="card-elevated">
+            <h2 className={`card-title ${fontClass}`}>📝 {L("ನಿಮ್ಮ ವಿವರಗಳು", "Your details", "आपका विवरण")}</h2>
+            <div className="form-grid">
+              {[
+                { label: t.name, value: name, onChange: setName, ph: t.namePh, id: "input-name" },
+                { label: t.block, value: block, onChange: setBlock, ph: t.blockPh, id: "input-block" },
+              ].map((fld) => (
+                <div key={fld.id} className="field">
+                  <label className={fontClass} htmlFor={fld.id}>{fld.label}</label>
+                  <input id={fld.id} className={fontClass} value={fld.value} onChange={(e) => fld.onChange(e.target.value)} placeholder={fld.ph} />
+                </div>
               ))}
             </div>
+            <div className="field mb-4">
+              <label className={fontClass} htmlFor="district-select">{t.district}</label>
+              <select id="district-select" value={district} onChange={(e) => setDistrict(e.target.value)}>
+                {KA_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="field mb-4">
+              <label className={fontClass}>{t.lang}</label>
+              <div className="lang-choice">
+                {([["kn","ಕನ್ನಡ"],["en","English"],["hi","हिंदी"]] as const).map(([l, label]) => (
+                  <button key={l} id={`pref-lang-${l}`} onClick={() => setLang(l)}
+                    className={`btn btn-sm ${lang === l ? "btn-primary" : "btn-outline"}`}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <button id="save-profile-btn" className={`btn btn-primary btn-full btn-lg ${fontClass}`} onClick={handleSave} disabled={!name.trim()}>
+              {saved ? `✅ ${t.saved}` : t.save}
+            </button>
+            {profile && (
+              <button className="btn btn-ghost btn-sm w-full mt-2 text-danger" onClick={handleClear}>{t.clear}</button>
+            )}
           </div>
 
-          <button id="save-profile-btn" className={`btn btn-primary btn-full btn-lg ${fontClass}`} onClick={handleSave} disabled={!name.trim()}>
-            {saved ? `✅ ${t.saved}` : t.save}
-          </button>
-
-          {profile && (
-            <button className="btn btn-ghost btn-sm w-full mt-2 text-danger" onClick={handleClear}>{t.clear}</button>
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Stats (if existing profile) */}
+            {profile && (
+              <div className="card">
+                <h2 className={`card-title ${fontClass}`}>📈 {t.stats}</h2>
+                <div className="mini-stats" style={{ marginBottom: 8 }}>
+                  <div className="mini-stat"><span className="ms-icon" style={{ background: "#d8f3dc" }}>🎯</span>
+                    <div><div className="ms-val">{profile.totalSessions}</div><div className={`ms-label ${fontClass}`}>{t.sessions}</div></div></div>
+                  <div className="mini-stat"><span className="ms-icon" style={{ background: "#e3eefc" }}>🏘️</span>
+                    <div><div className="ms-val">{profile.totalVisits}</div><div className={`ms-label ${fontClass}`}>{t.visits}</div></div></div>
+                </div>
+                <div className="text-xs text-muted">{t.since}: {new Date(profile.createdAt).toLocaleDateString("en-IN")}</div>
+              </div>
+            )}
+            <div className="card" style={{ display: "flex", gap: 14, alignItems: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/step3.svg" alt="" width={64} height={64} />
+              <div className={`text-sm ${fontClass}`} style={{ lineHeight: 1.6 }}>
+                <strong>{L("ನಿಮ್ಮ ಮಾಹಿತಿ ಈ ಸಾಧನದಲ್ಲೇ ಇರುತ್ತದೆ", "Your details stay on this device", "आपकी जानकारी इसी डिवाइस पर रहती है")}</strong><br />
+                <span className="text-muted">{L(
+                  "ಹೆಸರು ಮತ್ತು ಬ್ಲಾಕ್ ಅನ್ನು ಸ್ವಾಗತ ಸಂದೇಶ ಮತ್ತು ಪ್ರಮಾಣಪತ್ರಕ್ಕಾಗಿ ಮಾತ್ರ ಬಳಸಲಾಗುತ್ತದೆ.",
+                  "Your name and block are only used for the welcome message and the certificate.",
+                  "नाम और ब्लॉक केवल स्वागत संदेश और प्रमाण पत्र के लिए उपयोग होते हैं।")}</span>
+              </div>
+            </div>
+            <button className={`btn btn-outline btn-full ${fontClass}`} onClick={() => router.push("/#start")}>
+              ▶ {L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ", "Start a session", "सत्र शुरू करें")}
+            </button>
+          </div>
         </div>
-
-        <button className="btn btn-ghost btn-full mt-3" onClick={() => router.push("/")}>← {uiLang === "kn" ? "ಮನೆಗೆ" : uiLang === "hi" ? "होम" : "Home"}</button>
       </main>
+      <SiteFooter />
     </div>
   );
 }

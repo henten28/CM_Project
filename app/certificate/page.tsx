@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useLang } from "@/lib/prefs";
 
 function CertificateContent() {
   const params = useSearchParams();
@@ -10,12 +11,12 @@ function CertificateContent() {
   const score = params.get("score") ?? "—";
   const modules = params.get("modules") ?? "";
   const date = params.get("date") ?? new Date().toISOString().split("T")[0];
-  const lang = (params.get("lang") ?? "en") as "kn" | "en" | "hi";
+  const [lang] = useLang();  // shared, saved preference
 
   const labels = {
-    kn: { title: "AMR ಶಿಕ್ಷಣ ಪ್ರಮಾಣಪತ್ರ", cert: "ಇದರ ಮೂಲಕ ಖಚಿತ ಮಾಡಲಾಗಿದೆ ತರಬೇತಿ ಪಡೆದಿದ್ದಾರೆ", topic: "ವಿಷಯ", score: "ರಸಪ್ರಶ್ನೆ ಅಂಕ", modules: "ಮಾಡ್ಯೂಲ್‌ಗಳು", date: "ದಿನಾಂಕ", issued: "ಕರ್ನಾಟಕ ಆರೋಗ್ಯ ಇಲಾಖೆ ಮೊಹರು", print: "🖨️ ಮುದ್ರಿಸಿ" },
-    en: { title: "AMR Education Certificate", cert: "This certifies that the ASHA worker completed a session on", topic: "Topic", score: "Quiz Score", modules: "Modules", date: "Date", issued: "Karnataka Health Department", print: "🖨️ Print" },
-    hi: { title: "AMR शिक्षण प्रमाण पत्र", cert: "यह प्रमाणित करता है कि ASHA कार्यकर्ता ने सत्र पूरा किया", topic: "विषय", score: "प्रश्नोत्तरी स्कोर", modules: "मॉड्यूल", date: "दिनांक", issued: "कर्नाटक स्वास्थ्य विभाग", print: "🖨️ प्रिंट" },
+    kn: { title: "AMR ಶಿಕ್ಷಣ ಪ್ರಮಾಣಪತ್ರ", cert: "ಇದರ ಮೂಲಕ ಖಚಿತ ಮಾಡಲಾಗಿದೆ ತರಬೇತಿ ಪಡೆದಿದ್ದಾರೆ", topic: "ವಿಷಯ", score: "ರಸಪ್ರಶ್ನೆ ಅಂಕ", modules: "ಮಾಡ್ಯೂಲ್‌ಗಳು", date: "ದಿನಾಂಕ", issued: "AMR ಜಾಗೃತಿ · ಶೈಕ್ಷಣಿಕ ಮಾದರಿ (ಅಧಿಕೃತ ಪ್ರಮಾಣಪತ್ರ ಅಲ್ಲ)", print: "🖨️ ಮುದ್ರಿಸಿ" },
+    en: { title: "AMR Education Certificate", cert: "This certifies that the ASHA worker completed a session on", topic: "Topic", score: "Quiz Score", modules: "Modules", date: "Date", issued: "AMR Jagruti · Academic prototype (not an official certificate)", print: "🖨️ Print" },
+    hi: { title: "AMR शिक्षण प्रमाण पत्र", cert: "यह प्रमाणित करता है कि ASHA कार्यकर्ता ने सत्र पूरा किया", topic: "विषय", score: "प्रश्नोत्तरी स्कोर", modules: "मॉड्यूल", date: "दिनांक", issued: "AMR जागृति · शैक्षणिक प्रोटोटाइप (आधिकारिक प्रमाण पत्र नहीं)", print: "🖨️ प्रिंट" },
   };
   const L = labels[lang];
 

@@ -18,7 +18,7 @@ class StartRequest(BaseModel):
 
 class StepRequest(BaseModel):
     sessionId: str
-    action: Literal["approve", "answer", "ask"]
+    action: Literal["approve", "answer", "ask", "resume"]
     editedContentIds: Optional[List[str]] = Field(default=None, max_length=20)  # approve: ASHA's edited plan
     answers: Optional[List[AnswerIn]] = Field(default=None, max_length=10)  # answer
     text: Optional[str] = Field(default=None, min_length=1, max_length=500)  # ask
@@ -63,6 +63,8 @@ def step(req: StepRequest):
             out = orchestrator.approve(s, req.editedContentIds)
         elif req.action == "answer":
             out = orchestrator.answer(s, req.answers)
+        elif req.action == "resume":
+            out = orchestrator.resume(s)
         else:
             out = orchestrator.ask(s, req.text)
     except orchestrator.BadState as e:

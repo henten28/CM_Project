@@ -5,12 +5,9 @@ from typing import Any, Dict, List, Optional
 from agents import planning_agent, retrieval_agent, safety_controller, summary_agent, tutor_agent
 from agents.content import repo
 from agents.models import AnswerIn, Handoff, SafetyResult, SessionRecord, now_iso
+import db
 
 log = logging.getLogger("orchestrator")
-
-# in-memory session store for the prototype; the proposal's SQLite + SQLAlchemy layer replaces this
-_SESSIONS: Dict[str, SessionRecord] = {}
-
 
 class NotFound(LookupError):
     pass
@@ -26,7 +23,7 @@ def _handoff(s: SessionRecord, source: str, target: str, action: str, **data: An
 
 
 def get(session_id: str) -> SessionRecord:
-    s = _SESSIONS.get(session_id)
+    s = db.load(session_id)
     if s is None:
         raise NotFound(session_id)
     return s
@@ -53,19 +50,20 @@ def _safety_gate(s: SessionRecord, text: str, where: str) -> Optional[SafetyResu
 async def start(topic: str, duration: int, lang: str, prior_gaps: List[str]) -> Dict[str, Any]:
     s = SessionRecord(id=f"sess-{uuid.uuid4().hex[:12]}", topic=topic, durationMinutes=duration, lang=lang,
                       priorGaps=prior_gaps)
-    _SESSIONS[s.id] = s
     _handoff(s, "api", "orchestrator", "start", duration=duration, lang=lang, priorGaps=prior_gaps)
 
     safety = _safety_gate(s, topic, "start")
     if safety:
         s.state = "SAFETY_HOLD"
         s.startSafety = safety
+        db.save(s)
         return {"session": s, "safety": safety, "plan": None}
 
     plan, source, notes = await planning_agent.run(topic, duration, lang, prior_gaps)
     s.plan, s.planSource = plan, source
     _handoff(s, "planning_agent", "asha", "plan_for_review", planSource=source, notes=notes,
              contentIds=[c for m in plan.lessonPlan for c in m.contentIds])
+    db.save(s)
     return {"session": s, "safety": None, "plan": plan}
 
 
@@ -101,6 +99,7 @@ def approve(s: SessionRecord, edited_content_ids: Optional[List[str]]) -> Dict[s
     questions = tutor_agent.pick_questions(plan, [], s.priorGaps, n=3)
     s.askedQuestionIds += [q["id"] for q in questions]
     _handoff(s, "tutor_agent", "asha", "checkpoint_quiz", questionIds=[q["id"] for q in questions])
+    db.save(s)
     return {"content": content, "questions": [tutor_agent.public_question(q) for q in questions],
             "warnings": warnings}
 
@@ -119,6 +118,7 @@ def answer(s: SessionRecord, answers: List[AnswerIn]) -> Dict[str, Any]:
              contentIds=content.contentIds)
     _handoff(s, "tutor_agent", "asha", "next_activity", score=result.scorePercent,
              level=result.nextActivity.level, kind=result.nextActivity.kind)
+    db.save(s)
     return {"tutor": result, "content": content}
 
 
@@ -126,12 +126,29 @@ def ask(s: SessionRecord, text: str) -> Dict[str, Any]:
     _require(s, "AWAITING_APPROVAL", "IN_PROGRESS", "SAFETY_HOLD")
     safety = _safety_gate(s, text, "ask")
     if safety:
+        db.save(s)
         return {"safety": safety, "content": None}
     # safe educational question: answer only with approved content, never generated text
     content = retrieval_agent.search(query=text, lang=s.lang, limit=3)
     _handoff(s, "retrieval_agent", "asha", "answer_from_library", contentIds=content.contentIds,
              refinements=content.refinements)
+    db.save(s)
     return {"safety": None, "content": content}
+
+
+def resume(s: SessionRecord) -> Dict[str, Any]:
+    # rebuild the client's view after a page reload: lesson content, unanswered questions, progress
+    _require(s, "IN_PROGRESS")
+    ids = [c for m in s.approvedPlan.lessonPlan for c in m.contentIds]
+    content = retrieval_agent.fetch(ids, s.lang)
+    answered = {a.questionId for a in s.answers}
+    pending = [repo().quiz_by_id[q] for q in s.askedQuestionIds if q not in answered and q in repo().quiz_by_id]
+    pct = tutor_agent.score(s.answers)
+    _handoff(s, "api", "orchestrator", "resume", answered=len(s.answers), pending=len(pending))
+    db.save(s)
+    return {"content": content, "questions": [tutor_agent.public_question(q) for q in pending],
+            "progress": {"scorePercent": pct, "answered": len(s.answers), "correct": sum(a.correct for a in s.answers),
+                         "level": tutor_agent.level_for(pct) if s.answers else None}}
 
 
 # ── 3. complete: summary agent ──
@@ -144,4 +161,5 @@ def complete(s: SessionRecord) -> Dict[str, Any]:
     s.completedAt = now_iso()
     _handoff(s, "summary_agent", "dashboard", "session_summary", score=s.summary.scorePercent,
              gaps=[g.conceptTag for g in s.summary.remainingGaps], referrals=len(s.summary.referralTasks))
+    db.save(s)
     return {"summary": s.summary}

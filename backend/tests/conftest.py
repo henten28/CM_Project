@@ -1,10 +1,14 @@
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # run against backend/ as the import root, always in mock mode
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ["BEDROCK_MOCK"] = "true"
+# tests use a throwaway SQLite file, never the real backend/amr_jagruti.db
+_TMP_DB = Path(tempfile.mkdtemp()) / "test.db"
+os.environ["DATABASE_URL"] = f"sqlite:///{_TMP_DB}"
 
 import pytest
 from fastapi.testclient import TestClient

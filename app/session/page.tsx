@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSession, approvePlan, submitAnswers, askQuestion, completeSession, pick, voiceLang,
+import { useLang } from "@/lib/prefs";
+import { getSession, approvePlan, submitAnswers, askQuestion, completeSession, resumeSession, pick, voiceLang,
   type SessionRecord, type ContentHit, type QuizItem, type SessionSummary, type SafetyResult, type Level } from "@/lib/api-client";
-import { logSafetyEvent } from "@/lib/safety-log";
 import { recordGap, getDueReviews } from "@/lib/spaced-repetition";
 import { getProfile, incrementSessions } from "@/lib/profile-store";
 
@@ -39,18 +39,14 @@ function stopSpeak() {
 
 // difficulty level now comes from the backend tutor agent (fixed thresholds there)
 
-// local safety log only knows the old three categories
-function logCategory(c: SafetyResult["category"]): "URGENT"|"PRESCRIBING"|"PERSONAL_MEDICAL" {
-  return c === "URGENT" ? "URGENT" : c === "PERSONAL_MEDICAL" ? "PERSONAL_MEDICAL" : "PRESCRIBING";
-}
+// safety events are recorded by the backend as referral tasks (see the dashboard)
 
 function SessionContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("id") ?? "";
-  const urlLang = (searchParams.get("lang") ?? "kn") as Lang;
   const router = useRouter();
 
-  const [lang] = useState(urlLang);
+  const [lang] = useLang();  // shared, saved preference
   const [phase, setPhase] = useState<Phase>("loading");
   const [session, setSession] = useState<SessionRecord | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -142,7 +138,6 @@ function SessionContent() {
   function showSafety(res: SafetyResult) {
     if (!res.triggered || !res.message) return;
     setSafetyAlert({...res.message, type: res.category});
-    logSafetyEvent({sessionId, category: logCategory(res.category), trigger: res.ruleId ?? "", lang});
   }
 
   // Init
@@ -162,9 +157,18 @@ function SessionContent() {
       }
       if (s.state === "COMPLETED" && s.summary) { setSummary(s.summary); setPhase("summary"); return; }
       if (s.state === "IN_PROGRESS") {
-        // content and quiz state live in the page, so a reloaded session can only be finished
-        pushMsg({role:"system",text:L("ಈ ಅಧಿವೇಶನ ಈಗಾಗಲೇ ನಡೆಯುತ್ತಿದೆ.","This session is already in progress.","यह सत्र पहले से चल रहा है।")});
-        setPhase("hold");
+        // reloaded mid-session: the backend rebuilds lessons, pending questions and progress
+        try {
+          const r = await resumeSession(sessionId);
+          setBlocks(r.content.hits);
+          setQuestions(r.questions);
+          setQuizTotal(r.progress.answered);
+          setQuizCorrect(r.progress.correct);
+          setLevel(r.progress.level);
+          pushMsg({role:"system",text:L("↻ ಅಧಿವೇಶನ ಮುಂದುವರಿಸಲಾಗಿದೆ.","↻ Session resumed.","↻ सत्र फिर से शुरू हुआ।")});
+          // nothing answered yet: back to the lesson; otherwise straight to the remaining questions
+          setPhase(r.progress.answered === 0 ? "teaching" : r.questions.length ? "quiz" : "hold");
+        } catch (e) { showError(e); setPhase("hold"); }
         return;
       }
       pushMsg({role:"agent",agentName:L("ಯೋಜನಾ ಏಜೆಂಟ್","Planning Agent","योजना एजेंट"),

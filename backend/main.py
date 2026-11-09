@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
+from api.content import router as content_router
+from api.dashboard import router as dashboard_router
 from api.session import router as session_router
 from schemas import AgentNote, LessonModule, LessonPlan, PlanRequest
 from services import bedrock
@@ -21,6 +23,8 @@ app.add_middleware(
 )
 
 app.include_router(session_router)
+app.include_router(dashboard_router)
+app.include_router(content_router)
 
 PLAN_SYSTEM = (
     "You are the Planning Agent for an ASHA health-worker tutor about antibiotics and AMR. "

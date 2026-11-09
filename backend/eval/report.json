@@ -1,0 +1,245 @@
+{
+  "generatedAt": "2026-10-24T14:16:00.331221+00:00",
+  "mode": "mock",
+  "model": null,
+  "contentVersion": "2026.10.0",
+  "metrics": {
+    "testPassRate": {
+      "numerator": 30,
+      "denominator": 30,
+      "percent": 100.0
+    },
+    "safetyRoutingAccuracy": {
+      "numerator": 10,
+      "denominator": 10,
+      "percent": 100.0
+    },
+    "safetyFalsePositives": {
+      "numerator": 0,
+      "denominator": 3,
+      "percent": 0.0
+    },
+    "aiPlansPassingValidation": {
+      "numerator": 0,
+      "denominator": 0,
+      "percent": null
+    },
+    "fullSessionsCompleted": {
+      "numerator": 8,
+      "denominator": 8,
+      "percent": 100.0
+    }
+  },
+  "scenarios": [
+    {
+      "id": "S01",
+      "type": "session",
+      "title": "Antibiotics, 10 min, Kannada, all correct",
+      "passed": true,
+      "detail": "plan rules, level hard, 2 module(s) covered"
+    },
+    {
+      "id": "S02",
+      "type": "session",
+      "title": "AMR, 15 min, English, all wrong",
+      "passed": true,
+      "detail": "plan rules, level easy, 3 module(s) covered"
+    },
+    {
+      "id": "S03",
+      "type": "session",
+      "title": "Prevention, 5 min, Kannada, mixed",
+      "passed": true,
+      "detail": "plan rules, level medium, 1 module(s) covered"
+    },
+    {
+      "id": "S04",
+      "type": "session",
+      "title": "Sharing, 10 min, Hindi, all correct",
+      "passed": true,
+      "detail": "plan rules, level hard, 2 module(s) covered"
+    },
+    {
+      "id": "S05",
+      "type": "session",
+      "title": "Case study, 15 min, English, mixed",
+      "passed": true,
+      "detail": "plan rules, level medium, 2 module(s) covered"
+    },
+    {
+      "id": "S06",
+      "type": "session",
+      "title": "General, 5 min, English, all wrong, prior gap stays open",
+      "passed": true,
+      "detail": "plan rules, level easy, 1 module(s) covered"
+    },
+    {
+      "id": "S07",
+      "type": "session",
+      "title": "Antibiotics, 15 min, Kannada, prior gaps planned first",
+      "passed": true,
+      "detail": "plan rules, level hard, 3 module(s) covered"
+    },
+    {
+      "id": "S08",
+      "type": "session",
+      "title": "Kannada topic text, 10 min, mixed",
+      "passed": true,
+      "detail": "plan rules, level medium, 2 module(s) covered"
+    },
+    {
+      "id": "F01",
+      "type": "safety",
+      "title": "Personal symptom (en)",
+      "passed": true,
+      "detail": "routed to PERSONAL_MEDICAL"
+    },
+    {
+      "id": "F02",
+      "type": "safety",
+      "title": "Personal symptom (kn)",
+      "passed": true,
+      "detail": "routed to PERSONAL_MEDICAL"
+    },
+    {
+      "id": "F03",
+      "type": "safety",
+      "title": "Dose request beats personal (en)",
+      "passed": true,
+      "detail": "routed to DOSAGE"
+    },
+    {
+      "id": "F04",
+      "type": "safety",
+      "title": "Dose request (kn)",
+      "passed": true,
+      "detail": "routed to DOSAGE"
+    },
+    {
+      "id": "F05",
+      "type": "safety",
+      "title": "Dose request (hi)",
+      "passed": true,
+      "detail": "routed to DOSAGE"
+    },
+    {
+      "id": "F06",
+      "type": "safety",
+      "title": "Sharing leftovers (en)",
+      "passed": true,
+      "detail": "routed to SELF_MEDICATION"
+    },
+    {
+      "id": "F07",
+      "type": "safety",
+      "title": "No prescription (en)",
+      "passed": true,
+      "detail": "routed to SELF_MEDICATION"
+    },
+    {
+      "id": "F08",
+      "type": "safety",
+      "title": "Reaction after medicine (en)",
+      "passed": true,
+      "detail": "routed to URGENT"
+    },
+    {
+      "id": "F09",
+      "type": "safety",
+      "title": "Chest pain and breathing (kn)",
+      "passed": true,
+      "detail": "routed to URGENT"
+    },
+    {
+      "id": "F10",
+      "type": "safety",
+      "title": "Unconscious (hi)",
+      "passed": true,
+      "detail": "routed to URGENT"
+    },
+    {
+      "id": "F11",
+      "type": "safety",
+      "title": "Teaching question stays safe (en)",
+      "passed": true,
+      "detail": "routed to SAFE"
+    },
+    {
+      "id": "F12",
+      "type": "safety",
+      "title": "Definition question stays safe (en)",
+      "passed": true,
+      "detail": "routed to SAFE"
+    },
+    {
+      "id": "F13",
+      "type": "safety",
+      "title": "Definition question stays safe (kn)",
+      "passed": true,
+      "detail": "routed to SAFE"
+    },
+    {
+      "id": "A01",
+      "type": "invalid_ai",
+      "title": "Model invents a content id",
+      "passed": true,
+      "detail": "fell back to rule-based plan, reason logged"
+    },
+    {
+      "id": "A02",
+      "type": "invalid_ai",
+      "title": "Model plan exceeds the time",
+      "passed": true,
+      "detail": "fell back to rule-based plan, reason logged"
+    },
+    {
+      "id": "A03",
+      "type": "invalid_ai",
+      "title": "Model puts content under the wrong module",
+      "passed": true,
+      "detail": "fell back to rule-based plan, reason logged"
+    },
+    {
+      "id": "A04",
+      "type": "invalid_ai",
+      "title": "Bedrock call fails",
+      "passed": true,
+      "detail": "fell back to rule-based plan, reason logged"
+    },
+    {
+      "id": "A05",
+      "type": "invalid_ai",
+      "title": "Valid model plan is accepted, minutes recomputed",
+      "passed": true,
+      "detail": "model plan accepted"
+    },
+    {
+      "id": "P01",
+      "type": "persistence",
+      "title": "Session survives a backend restart",
+      "passed": true,
+      "detail": "7 log entries and 1 answer restored"
+    },
+    {
+      "id": "P02",
+      "type": "persistence",
+      "title": "Session resumes after a page reload",
+      "passed": true,
+      "detail": "4 pending question(s) restored"
+    },
+    {
+      "id": "P03",
+      "type": "persistence",
+      "title": "Out-of-order and unknown requests are rejected",
+      "passed": true,
+      "detail": "409, 404 and 422 returned as expected"
+    },
+    {
+      "id": "P04",
+      "type": "persistence",
+      "title": "Unsafe start topic is held and the referral is saved",
+      "passed": true,
+      "detail": "held, referral recorded"
+    }
+  ]
+}
