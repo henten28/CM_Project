@@ -1,6 +1,8 @@
-from typing import List
+from typing import Dict, List, Tuple
 
-from agents import retrieval_agent, tutor_agent
+from pydantic import BaseModel, ConfigDict, Field
+
+from agents import llm, retrieval_agent, tutor_agent
 from agents.content import repo
 from agents.models import Bilingual, CoveredModule, GapItem, SessionRecord, SessionSummary
 
@@ -44,3 +46,57 @@ def run(session: SessionRecord) -> SessionSummary:
         sourcesCited=[{"id": s, "name": r.sources[s]} for s in cited_ids],
         contentVersion=r.version, note=note,
     )
+
+
+# ── LLM summary: recap and next-visit suggestion written from the session log ──
+
+class _Text(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kn: str = Field(description="Kannada")
+    en: str = Field(description="English")
+
+
+class SummaryDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    narrative: _Text = Field(description="2-3 sentence recap of the session for the ASHA worker and supervisor")
+    nextVisit: _Text = Field(description="1-2 sentences: what the ASHA should revisit with this household next time")
+    priorityGaps: List[str] = Field(max_length=10, description="the open gap tags, most important first")
+
+
+SUMMARY_SYSTEM = (
+    "You are the Summary and Follow-up Agent. Using ONLY the session facts given, write a short recap of what the "
+    "household learned and how they did, and a suggestion for the next visit. Order the open gaps by importance "
+    "using only the gap tags given. Mention referrals only as 'referred to the ANM/health worker'. Do not invent "
+    "facts, scores, or medical advice."
+)
+
+
+async def run_with_llm(session: SessionRecord) -> Tuple[SessionSummary, Dict]:
+    summary = run(session)
+    if not llm.enabled():
+        return summary, {"agentSource": "rules", "note": "mock mode: rules"}
+    r = repo()
+    gap_tags = [g.conceptTag for g in summary.remainingGaps]
+    covered = "; ".join(f"{c.title.en} ({len(c.contentIds)} lesson(s))" for c in summary.covered) or "none"
+    answers = "\n".join(f"  - {a.conceptTag}: {'correct' if a.correct else 'wrong'} | "
+                        f"{r.quiz_by_id[a.questionId]['question']['en'] if a.questionId in r.quiz_by_id else a.questionId}"
+                        for a in session.answers) or "  (no quiz answers)"
+    prompt = (
+        f"Topic: {session.topic} | duration {session.durationMinutes} min | language {session.lang}\n"
+        f"Topics covered: {covered}\nQuiz score: {summary.scorePercent}% over {summary.answered} answer(s)\n"
+        f"Answers:\n{answers}\nOpen gap tags: {', '.join(gap_tags) or 'none'}\n"
+        f"Referrals logged by the safety controller: {len(summary.referralTasks)}"
+    )
+    draft, note = await llm.call("summary_agent", prompt, SummaryDraft, SUMMARY_SYSTEM, max_tokens=700)
+    if draft is None:
+        return summary, {"agentSource": "rules", "note": note}
+
+    # reorder gaps by the model's priority, keeping only real gap tags; anything it left out keeps its place at the end
+    order = [t for t in dict.fromkeys(draft.priorityGaps) if t in gap_tags]
+    rank = {t: i for i, t in enumerate(order)}
+    summary.remainingGaps.sort(key=lambda g: rank.get(g.conceptTag, len(rank)))
+    summary.narrative = llm.safe_bilingual(Bilingual(kn=draft.narrative.kn, en=draft.narrative.en))
+    summary.nextVisit = llm.safe_bilingual(Bilingual(kn=draft.nextVisit.kn, en=draft.nextVisit.en))
+    summary.agentSource = "llm"
+    return summary, {"agentSource": "llm", "priority": order,
+                     "screenedOut": [k for k in ("narrative", "nextVisit") if getattr(summary, k) is None]}

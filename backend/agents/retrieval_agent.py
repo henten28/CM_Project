@@ -1,6 +1,9 @@
 import re
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from agents import llm
 from agents.content import display_lang, repo
 from agents.models import ContentHit, RetrievalResult
 
@@ -123,3 +126,83 @@ def search(
         displayLang=display_lang(lang),
         contentVersion=r.version,
     )
+
+
+# ── LLM-assisted search (used for free-text questions during a session) ──
+# The model turns a household's question (Kannada, English or mixed) into search terms and filters drawn from the
+# approved vocabulary. Retrieval itself stays lexical over reviewed content, so the model can widen or narrow the
+# search but can never add content. If coverage is empty, the model gets one chance to refine its search.
+
+
+class SearchPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    searchTerms: List[str] = Field(default_factory=list, max_length=8,
+                                   description="short English keywords likely to appear in the lesson text")
+    conceptTags: List[str] = Field(default_factory=list, max_length=4, description="tags from the given vocabulary")
+    moduleIds: List[str] = Field(default_factory=list, max_length=3, description="module ids from the given list")
+
+
+RETRIEVAL_SYSTEM = (
+    "You are the Retrieval Agent. Turn the question into a search over the approved lesson library. "
+    "Questions may be in Kannada, English, Hindi or romanised Kannada. Return short English search terms, "
+    "concept tags chosen ONLY from the vocabulary, and at most three module ids ONLY from the module list. "
+    "Do not answer the question yourself."
+)
+
+
+def vocabulary() -> Tuple[List[str], List[str]]:
+    r = repo()
+    tags = sorted({t for b in r.blocks for t in b["conceptTags"]})
+    modules = [f"{m['id']}: {m['title']['en']}" for m in r.modules]
+    return tags, modules
+
+
+def _clean(plan: SearchPlan) -> Tuple[SearchPlan, List[str]]:
+    # keep only tags and modules that exist; the model never gets to invent filters
+    r = repo()
+    tags, _ = vocabulary()
+    known_tags = {t.lower(): t for t in tags}
+    dropped = [t for t in plan.conceptTags if t.lower() not in known_tags]
+    dropped += [m for m in plan.moduleIds if m not in r.module_by_id]
+    cleaned = SearchPlan(
+        searchTerms=[t.strip()[:40] for t in plan.searchTerms if t.strip()][:8],
+        conceptTags=[known_tags[t.lower()] for t in plan.conceptTags if t.lower() in known_tags],
+        moduleIds=[m for m in plan.moduleIds if m in r.module_by_id],
+    )
+    return cleaned, [f"dropped_unknown:{d}" for d in dropped]
+
+
+async def agentic_search(query: str, lang: str = "en", limit: int = 3) -> Tuple[RetrievalResult, Dict]:
+    """Returns (result, trace). trace records what the agent searched for, for the audit log."""
+    tags, modules = vocabulary()
+    prompt = (f"Question: {query}\nSession language: {lang}\n\nConcept tag vocabulary: {', '.join(tags)}\n"
+              f"Modules:\n" + "\n".join(modules))
+    plan, note = await llm.call("retrieval_agent", prompt, SearchPlan, RETRIEVAL_SYSTEM, max_tokens=300)
+    if plan is None:
+        res = search(query=query, lang=lang, limit=limit)
+        return res, {"agentSource": "rules", "note": note}
+
+    plan, dropped = _clean(plan)
+    trace: Dict = {"agentSource": "llm", "searchTerms": plan.searchTerms, "conceptTags": plan.conceptTags,
+                   "moduleIds": plan.moduleIds, "dropped": dropped}
+    res = search(query=" ".join([query] + plan.searchTerms), concept_tags=plan.conceptTags,
+                 module_ids=plan.moduleIds, lang=lang, limit=limit)
+    if res.contentIds:
+        return res, trace
+
+    # coverage is empty: ask once for a broader search, then fall back to plain keyword search
+    retry_prompt = (prompt + f"\n\nYour previous search (terms {plan.searchTerms}, tags {plan.conceptTags}, "
+                    f"modules {plan.moduleIds}) found no approved lessons. Propose a broader search.")
+    plan2, note2 = await llm.call("retrieval_agent", retry_prompt, SearchPlan, RETRIEVAL_SYSTEM, max_tokens=300)
+    if plan2 is not None:
+        plan2, dropped2 = _clean(plan2)
+        trace["refined"] = {"searchTerms": plan2.searchTerms, "conceptTags": plan2.conceptTags, "dropped": dropped2}
+        res = search(query=" ".join([query] + plan2.searchTerms), concept_tags=plan2.conceptTags, lang=lang,
+                     limit=limit)
+        res.refinements.insert(0, "llm_refined_search")
+        if res.contentIds:
+            return res, trace
+    res = search(query=query, lang=lang, limit=limit)
+    res.refinements.insert(0, "llm_search_empty_fell_back_to_keywords")
+    trace["fallback"] = note2 if plan2 is None else "keywords"
+    return res, trace

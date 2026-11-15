@@ -105,13 +105,13 @@ def test_parallel_first_requests_on_a_fresh_database(tmp_path, monkeypatch):
     # the dashboard fires several requests at once; table creation must not race
     from concurrent.futures import ThreadPoolExecutor
     import config
-    from fastapi.testclient import TestClient
     import main
+    from conftest import SignedInClient
 
     monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{tmp_path / 'fresh.db'}")
     db.reset_engine()
     try:
-        c = TestClient(main.app)
+        c = SignedInClient(main.app)
         paths = ["/dashboard/sessions", "/dashboard/tasks", "/dashboard/evaluation", "/content"] * 4
         with ThreadPoolExecutor(max_workers=16) as pool:
             codes = list(pool.map(lambda p: c.get(p).status_code, paths))

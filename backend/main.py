@@ -1,9 +1,14 @@
 import logging
 
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+import auth
 import config
+from api.auth import router as auth_router
+from api.visits import router as visits_router
 from api.content import router as content_router
 from api.agent import router as agent_router
 from api.dashboard import router as dashboard_router
@@ -14,16 +19,24 @@ from services import bedrock
 
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="ASHA tutor backend")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    auth.ensure_demo_users()  # demo ASHA and supervisor accounts (SEED_DEMO_USERS=false turns this off)
+    yield
+
+
+app = FastAPI(title="ASHA tutor backend", lifespan=lifespan)
 
 # only the Next.js origin may call this API; no credentials are ever returned to it
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[config.FRONTEND_ORIGIN],
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
+app.include_router(auth_router)
+app.include_router(visits_router)
 app.include_router(session_router)
 app.include_router(dashboard_router)
 app.include_router(content_router)
@@ -61,7 +74,7 @@ def health():
     return {"ok": True, **bedrock.status()}
 
 
-@app.post("/api/plan", response_model=LessonPlan)
+@app.post("/api/plan", response_model=LessonPlan, dependencies=[Depends(auth.require_asha)])
 async def plan(req: PlanRequest):
     catalog = "\n".join(
         f"- id={m.id} | {m.title} | {m.estimatedMinutes} min | contentIds={m.contentIds}" for m in req.modules

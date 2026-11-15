@@ -150,7 +150,8 @@ def _approved_path(file_value: Any) -> Path:
     if not isinstance(file_value, str) or not file_value.strip():
         raise ValueError("file must be a relative path under knowledge/documents")
     relative = Path(file_value)
-    if relative.is_absolute() or ".." in relative.parts:
+    # anchor also catches rooted paths such as "/tmp/x" on Windows, which is_absolute() does not
+    if relative.is_absolute() or relative.anchor or ".." in relative.parts:
         raise ValueError("file path must stay inside knowledge/documents")
     path = (DOCUMENTS_DIR / relative).resolve(strict=True)
     root = DOCUMENTS_DIR.resolve()

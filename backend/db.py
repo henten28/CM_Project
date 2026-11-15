@@ -52,6 +52,45 @@ class AuditLogRow(Base):
     data_json: Mapped[str] = mapped_column(Text)
 
 
+class UserRow(Base):
+    # ASHA workers and supervisors; household learners have no account
+    __tablename__ = "users"
+    username: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    role: Mapped[str] = mapped_column(String(16))  # "asha" | "supervisor"
+    district: Mapped[str] = mapped_column(String(60), default="")
+    block: Mapped[str] = mapped_column(String(60), default="")
+    password_hash: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class AuthTokenRow(Base):
+    # only a SHA-256 of each bearer token is stored, never the token itself
+    __tablename__ = "auth_tokens"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    username: Mapped[str] = mapped_column(ForeignKey("users.username"), index=True)
+    expires_at: Mapped[str] = mapped_column(String(40))
+
+
+class VisitRow(Base):
+    # household visits logged by an ASHA worker; quiz score comes from the linked session when there is one
+    __tablename__ = "visits"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    asha_username: Mapped[str] = mapped_column(ForeignKey("users.username"), index=True)
+    household: Mapped[str] = mapped_column(String(100))
+    village: Mapped[str] = mapped_column(String(100))
+    district: Mapped[str] = mapped_column(String(60))
+    topic: Mapped[str] = mapped_column(String(200))
+    lang: Mapped[str] = mapped_column(String(4))
+    date: Mapped[str] = mapped_column(String(10), index=True)
+    duration_min: Mapped[int] = mapped_column(Integer)
+    outcome: Mapped[str] = mapped_column(String(12))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    quiz_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    session_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
 _lock = threading.Lock()
 _maker: Optional[sessionmaker] = None
 
@@ -129,10 +168,18 @@ def load(session_id: str) -> Optional[SessionRecord]:
         return s
 
 
-def list_sessions(limit: int = 200) -> List[SessionRecord]:
+def list_sessions(limit: int = 200, asha: Optional[str] = None) -> List[SessionRecord]:
+    # asha: only sessions run by that ASHA worker (stored in the record, so filtered after loading)
     with _factory()() as db:
-        ids = list(db.scalars(select(SessionRow.id).order_by(SessionRow.created_at.desc()).limit(limit)))
-    return [s for s in (load(i) for i in ids) if s is not None]
+        ids = list(db.scalars(select(SessionRow.id).order_by(SessionRow.created_at.desc())
+                              .limit(limit if asha is None else 2000)))
+    out = [s for s in (load(i) for i in ids) if s is not None and (asha is None or s.ashaId == asha)]
+    return out[:limit]
+
+
+def session_factory() -> sessionmaker:
+    # shared with auth.py and visits.py
+    return _factory()
 
 
 # ── referral tasks ──

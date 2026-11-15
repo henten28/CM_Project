@@ -2,13 +2,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+import auth
 import db
+from api import visits as visits_api
 from agents import tutor_agent
 from agents.models import SessionRecord
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+# every dashboard route is for supervisors only
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(auth.require_supervisor)])
 
 EVAL_REPORT = Path(__file__).resolve().parent.parent / "eval" / "report.json"
 
@@ -34,7 +37,21 @@ def _row(s: SessionRecord) -> Dict[str, Any]:
         "safetyRouted": bool(s.escalations), "openTasks": sum(t.status == "open" for t in s.escalations),
         "lessonPlanValid": _plan_valid(s), "planSource": s.planSource if s.plan else None,
         "sessionCompleted": s.state == "COMPLETED",
+        "ashaId": s.ashaId, "ashaName": s.ashaName,
+        "agentSources": _agent_sources(s),
     }
+
+
+def _agent_sources(s: SessionRecord) -> Dict[str, str]:
+    # which agents actually used the LLM in this session ("llm") and which fell back to rules
+    out: Dict[str, str] = {"planning": s.planSource if s.plan else "none"}
+    for h in s.log:
+        src = h.data.get("agentSource")
+        if src and h.source in ("retrieval_agent", "tutor_agent", "summary_agent"):
+            key = h.source.replace("_agent", "")
+            if out.get(key) != "llm":
+                out[key] = src
+    return out
 
 
 @router.get("/sessions")
@@ -54,6 +71,11 @@ def close_task(task_id: str):
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     return task
+
+
+@router.get("/visits")
+def visits():
+    return visits_api.list_all()
 
 
 @router.get("/evaluation")

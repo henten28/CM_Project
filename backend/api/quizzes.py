@@ -1,10 +1,11 @@
-"""Unauthenticated same-browser demo API for reviewed quizzes and learner attempts."""
+"""Reviewed quizzes: ASHA workers draft, review and publish; household learners attempt without an account."""
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
+import auth
 import quiz_bank
 
 router = APIRouter(prefix="/quizzes", tags=["quizzes"])
@@ -69,12 +70,16 @@ def published_quizzes():
     return quiz_bank.list_published()
 
 
-@router.get("/drafts")
+# drafting, review and publication need a signed-in ASHA worker; published quizzes and attempts stay public
+ASHA = [Depends(auth.require_asha)]
+
+
+@router.get("/drafts", dependencies=ASHA)
 def drafts():
     return quiz_bank.list_drafts()
 
 
-@router.post("/drafts")
+@router.post("/drafts", dependencies=ASHA)
 async def create_draft(body: DraftRequest):
     try:
         return await quiz_bank.create_draft(body.topic, body.lang, body.difficulty, body.questionCount)
@@ -82,7 +87,7 @@ async def create_draft(body: DraftRequest):
         raise _error(error) from error
 
 
-@router.get("/drafts/{draft_id}")
+@router.get("/drafts/{draft_id}", dependencies=ASHA)
 def draft(draft_id: str):
     try:
         return quiz_bank.get_draft(draft_id)
@@ -90,7 +95,7 @@ def draft(draft_id: str):
         raise _error(error) from error
 
 
-@router.post("/drafts/{draft_id}/action")
+@router.post("/drafts/{draft_id}/action", dependencies=ASHA)
 async def draft_action(draft_id: str, body: DraftAction):
     try:
         return await quiz_bank.mutate_draft(

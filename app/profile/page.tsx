@@ -6,6 +6,8 @@ import { getProfile, saveProfile, clearProfile, KA_DISTRICTS, type AshaProfile }
 import { useLang, getLang } from "@/lib/prefs";
 import { SiteHeader, SiteFooter, PageBanner } from "@/components/SiteChrome";
 import { tr } from "@/lib/prefs";
+import { useUser } from "@/lib/auth-client";
+import { getMySessions, getMyVisits } from "@/lib/api-client";
 
 const T = {
   kn: {
@@ -70,8 +72,22 @@ export default function ProfilePage() {
   const [district, setDistrict] = useState("Bengaluru Urban");
   const [lang, setLang] = useState<"kn" | "en" | "hi">("kn");
   const [saved, setSaved] = useState(false);
+  const user = useUser();
+  const [counts, setCounts] = useState<{ sessions: number; completed: number; visits: number } | null>(null);
 
   useEffect(() => {
+    Promise.all([getMySessions(), getMyVisits()])
+      .then(([s, v]) => setCounts({ sessions: s.length, completed: s.filter((x) => x.state === "COMPLETED").length, visits: v.length }))
+      .catch(() => setCounts(null));
+  }, []);
+
+  // a new local profile starts from the account details
+  useEffect(() => {
+    if (!user || getProfile()) return;
+    Promise.resolve().then(() => { setName(user.name); setBlock(user.block); if (user.district) setDistrict(user.district); });
+  }, [user]);
+
+  useEffect(() => { Promise.resolve().then(() => {
     const p = getProfile();
     if (p) {
       setProfile(p);
@@ -82,7 +98,7 @@ export default function ProfilePage() {
     } else {
       setLang(getLang());  // a new profile starts with the language already chosen in the app
     }
-  }, []);
+  }); }, []);
 
   const t = T[uiLang];
   const fontClass = uiLang === "kn" ? "kn" : "";
@@ -153,23 +169,33 @@ export default function ProfilePage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Stats (if existing profile) */}
-            {profile && (
+            {user && (
+              <div className="card">
+                <h2 className={`card-title ${fontClass}`}>🔐 {L("ಖಾತೆ", "Account", "खाता")}</h2>
+                <div className="text-sm" style={{ lineHeight: 1.7 }}>
+                  <strong>{user.name}</strong> · {user.username}<br />
+                  {L("ಪಾತ್ರ", "Role", "भूमिका")}: {user.role === "asha" ? "ASHA" : L("ಮೇಲ್ವಿಚಾರಕ", "Supervisor", "पर्यवेक्षक")}
+                  {(user.block || user.district) && <> · {[user.block, user.district].filter(Boolean).join(", ")}</>}
+                </div>
+              </div>
+            )}
+            {counts && (
               <div className="card">
                 <h2 className={`card-title ${fontClass}`}>📈 {t.stats}</h2>
                 <div className="mini-stats" style={{ marginBottom: 8 }}>
                   <div className="mini-stat"><span className="ms-icon" style={{ background: "#d8f3dc" }}>🎯</span>
-                    <div><div className="ms-val">{profile.totalSessions}</div><div className={`ms-label ${fontClass}`}>{t.sessions}</div></div></div>
+                    <div><div className="ms-val">{counts.sessions}</div><div className={`ms-label ${fontClass}`}>{t.sessions} ({counts.completed} {L("ಪೂರ್ಣ", "completed", "पूर्ण")})</div></div></div>
                   <div className="mini-stat"><span className="ms-icon" style={{ background: "#e3eefc" }}>🏘️</span>
-                    <div><div className="ms-val">{profile.totalVisits}</div><div className={`ms-label ${fontClass}`}>{t.visits}</div></div></div>
+                    <div><div className="ms-val">{counts.visits}</div><div className={`ms-label ${fontClass}`}>{t.visits}</div></div></div>
                 </div>
-                <div className="text-xs text-muted">{t.since}: {new Date(profile.createdAt).toLocaleDateString("en-IN")}</div>
+                {profile && <div className="text-xs text-muted">{t.since}: {new Date(profile.createdAt).toLocaleDateString("en-IN")}</div>}
               </div>
             )}
             <div className="card" style={{ display: "flex", gap: 14, alignItems: "center" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/img/step3.svg" alt="" width={64} height={64} />
               <div className={`text-sm ${fontClass}`} style={{ lineHeight: 1.6 }}>
-                <strong>{L("ನಿಮ್ಮ ಮಾಹಿತಿ ಈ ಸಾಧನದಲ್ಲೇ ಇರುತ್ತದೆ", "Your details stay on this device", "आपकी जानकारी इसी डिवाइस पर रहती है")}</strong><br />
+                <strong>{L("ಈ ವಿವರಗಳು ಈ ಸಾಧನದಲ್ಲೇ ಇರುತ್ತವೆ", "These display details stay on this device", "ये विवरण इसी डिवाइस पर रहते हैं")}</strong><br />
                 <span className="text-muted">{L(
                   "ಹೆಸರು ಮತ್ತು ಬ್ಲಾಕ್ ಅನ್ನು ಸ್ವಾಗತ ಸಂದೇಶ ಮತ್ತು ಪ್ರಮಾಣಪತ್ರಕ್ಕಾಗಿ ಮಾತ್ರ ಬಳಸಲಾಗುತ್ತದೆ.",
                   "Your name and block are only used for the welcome message and the certificate.",

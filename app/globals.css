@@ -798,3 +798,33 @@ html[data-text-size="lg"] { font-size: 18.5px; }
   .page-banner-img { width: 72px; height: 72px; }
   .page-banner-actions { width: 100%; }
 }
+
+/* ── sign-in, role chrome ─────────────────────────────────────────────── */
+button.pill-btn { background: none; cursor: pointer; font-family: inherit; }
+.user-chip { display: inline-flex; align-items: center; gap: 10px; font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.login-wrap { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.login-card { padding: 24px; display: grid; gap: 14px; }
+.login-card h2 { color: var(--primary); font-size: 1.2rem; }
+.login-card .field input { width: 100%; }
+.login-error { padding: 10px 12px; border-radius: 9px; background: var(--red-100); border: 1px solid var(--red-600); color: #7d1018; font-size: 0.88rem; }
+.role-cards { display: grid; gap: 12px; }
+.role-card { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border: 1.5px solid var(--border); border-radius: 12px; background: var(--surface); text-decoration: none; color: inherit; }
+.role-card .rc-icon { font-size: 1.6rem; line-height: 1; }
+.role-card h3 { font-size: 0.98rem; color: var(--primary); margin-bottom: 4px; }
+.role-card p { font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; }
+.demo-accounts { font-size: 0.82rem; color: var(--text-muted); border-top: 1px dashed var(--border); padding-top: 10px; }
+.demo-accounts button { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; margin: 4px 6px 0 0; cursor: pointer; font-family: inherit; font-size: 0.8rem; }
+.demo-accounts button:hover { border-color: var(--primary); color: var(--primary); }
+.notice-bar { padding: 10px 14px; border-radius: 9px; background: #fff3cd; border: 1px solid var(--amber-500); font-size: 0.88rem; }
+.agent-tag { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--neutral-100); color: var(--text-muted); vertical-align: middle; }
+.agent-tag.llm { background: #e3eefc; color: #1d3557; }
+.ai-note { border-left: 3px solid #1d3557; background: #f3f7fd; padding: 10px 12px; border-radius: 0 8px 8px 0; font-size: 0.88rem; line-height: 1.6; }
+.ai-note .ai-label { display: block; font-size: 0.72rem; font-weight: 700; color: #1d3557; margin-bottom: 4px; }
+@media (max-width: 760px) { .login-wrap { grid-template-columns: 1fr; } }
+.recent-list { list-style: none; display: grid; gap: 6px; }
+.recent-list a { color: var(--text); text-decoration: none; font-size: 0.88rem; }
+.recent-list a:hover { color: var(--primary); text-decoration: underline; }
+.agent-log { margin: 8px 0 0; font-size: 0.76rem; line-height: 1.8; background: var(--neutral-100); border-radius: 8px; padding: 8px 8px 8px 26px; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; background: var(--surface); border-radius: 10px; overflow: hidden; }
+.dash-table th, .dash-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.dash-table th { background: var(--green-50); color: var(--primary); font-size: 0.78rem; }

@@ -6,7 +6,8 @@ import { useLang } from "@/lib/prefs";
 import { getSession, approvePlan, submitAnswers, askQuestion, completeSession, resumeSession, pick, voiceLang,
   type SessionRecord, type ContentHit, type QuizItem, type SessionSummary, type SafetyResult, type Level } from "@/lib/api-client";
 import { recordGap, getDueReviews } from "@/lib/spaced-repetition";
-import { getProfile, incrementSessions } from "@/lib/profile-store";
+import { incrementSessions } from "@/lib/profile-store";
+import { useUser } from "@/lib/auth-client";
 
 // hold: safety hold at start, or a reloaded session that can only be finished
 type Phase = "loading" | "planning" | "approval" | "teaching" | "quiz" | "summary" | "hold";
@@ -55,7 +56,7 @@ function SessionContent() {
   const [questions, setQuestions] = useState<QuizItem[]>([]);
   const [currentQIdx, setCurrentQIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [answerResult, setAnswerResult] = useState<{correct:boolean;explanation:{kn:string;en:string};reinforcement:ContentHit[]}|null>(null);
+  const [answerResult, setAnswerResult] = useState<{correct:boolean;explanation:{kn:string;en:string};reinforcement:ContentHit[];tip:{kn:string;en:string}|null}|null>(null);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [userInput, setUserInput] = useState("");
   const [safetyAlert, setSafetyAlert] = useState<{kn:string;en:string;hi:string;type:string}|null>(null);
@@ -66,7 +67,7 @@ function SessionContent() {
   const [quizCorrect, setQuizCorrect] = useState(0);
   const [quizTotal, setQuizTotal] = useState(0);
   const [dueReviews, setDueReviews] = useState<{tag:string;label:Record<string,string>}[]>([]);
-  const [profile] = useState(getProfile());
+  const user = useUser();
   const bottomRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -82,7 +83,7 @@ function SessionContent() {
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages,blocks,questions]);
 
   // Load due reviews
-  useEffect(() => { setDueReviews(getDueReviews()); }, []);
+  useEffect(() => { Promise.resolve().then(() => setDueReviews(getDueReviews())); }, []);
 
   // TTS control
   function handleSpeak(text: string, voice: Lang = contentLang) {
@@ -172,9 +173,9 @@ function SessionContent() {
         return;
       }
       pushMsg({role:"agent",agentName:L("ಯೋಜನಾ ಏಜೆಂಟ್","Planning Agent","योजना एजेंट"),
-        text:L(`ನಮಸ್ಕಾರ ${profile?.name??""}! "${s.topic}" ವಿಷಯಕ್ಕಾಗಿ ${s.durationMinutes} ನಿಮಿಷದ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧ.`,
-               `Hello ${profile?.name??""}! ${s.durationMinutes}-min lesson plan for "${s.topic}" ready. Please review.`,
-               `नमस्ते ${profile?.name??""}! "${s.topic}" के लिए ${s.durationMinutes} मिनट की पाठ योजना तैयार है।`)});
+        text:L(`ನಮಸ್ಕಾರ! "${s.topic}" ವಿಷಯಕ್ಕಾಗಿ ${s.durationMinutes} ನಿಮಿಷದ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧ. ದಯವಿಟ್ಟು ಪರಿಶೀಲಿಸಿ.`,
+               `Hello! ${s.durationMinutes}-min lesson plan for "${s.topic}" is ready. Please review it.`,
+               `नमस्ते! "${s.topic}" के लिए ${s.durationMinutes} मिनट की पाठ योजना तैयार है।`)});
       setPhase("approval");
     }
     if (sessionId) init();
@@ -236,7 +237,7 @@ function SessionContent() {
       const t = data.tutor;
       const fb = t.feedback[0];
       const reinforcement = data.content.hits.filter(h => fb.reinforcementContentIds.includes(h.id));
-      setAnswerResult({correct:fb.correct, explanation:fb.explanation, reinforcement});
+      setAnswerResult({correct:fb.correct, explanation:fb.explanation, reinforcement, tip: t.ashaTip ?? null});
       setQuizTotal(t.answered);
       setQuizCorrect(t.correct);
       setLevel(t.nextActivity.level);
@@ -285,7 +286,7 @@ function SessionContent() {
     <div className="session-layout">
       {/* Header */}
       <header className="app-header">
-        <div className="logo">
+        <div className="logo" style={{cursor:"pointer"}} onClick={()=>router.push("/")} title="Home">
           <div className="logo-icon">A</div>
           <div><div className="logo-text">AMR ಜಾಗೃತಿ</div><div className="logo-sub">{session?.topic??""}</div></div>
         </div>
@@ -447,6 +448,12 @@ function SessionContent() {
                       <div className="cb-source">📚 {b.source}</div>
                     </div>
                   ))}
+                  {answerResult.tip&&(
+                    <div className={`ai-note mt-2 ${fk}`}>
+                      <span className="ai-label">💡 {L("ಶಿಕ್ಷಕ ಏಜೆಂಟ್ ಸಲಹೆ (ASHA ಗೆ, AI ರಚಿತ)","Tutor agent tip for the ASHA (AI-written)","ट्यूटर एजेंट सुझाव (ASHA के लिए, AI द्वारा)")}</span>
+                      {pick(answerResult.tip,contentLang)}
+                    </div>
+                  )}
                   <button id="next-question-btn" className="btn btn-primary btn-sm mt-3" onClick={handleNext}>
                     {currentQIdx+1<questions.length?L("ಮುಂದಿನ ಪ್ರಶ್ನೆ →","Next Question →","अगला प्रश्न →"):L("ಸಾರಾಂಶ ನೋಡಿ →","View Summary →","सारांश देखें →")}
                   </button>
@@ -470,6 +477,13 @@ function SessionContent() {
                 <div className="stat-card"><div className="stat-val">{summary.covered.length}</div><div className={`stat-label ${fk}`}>{L("ವಿಷಯ","Topics","विषय")}</div></div>
                 <div className="stat-card"><div className="stat-val">{summary.covered.reduce((n,c)=>n+c.contentIds.length,0)}</div><div className={`stat-label ${fk}`}>{L("ಬ್ಲಾಕ್","Blocks","ब्लॉक")}</div></div>
               </div>
+              {summary.narrative&&(
+                <div className={`ai-note mb-4 ${fk}`}>
+                  <span className="ai-label">🤖 {L("ಸಾರಾಂಶ ಏಜೆಂಟ್ (AI ರಚಿತ, ಸುರಕ್ಷತಾ ಪರಿಶೀಲಿತ)","Summary agent recap (AI-written, safety-checked)","सारांश एजेंट (AI द्वारा, सुरक्षा-जांचा)")}</span>
+                  {pick(summary.narrative,contentLang)}
+                  {summary.nextVisit&&<div className="mt-2"><strong>{L("ಮುಂದಿನ ಭೇಟಿ:","Next visit:","अगली मुलाकात:")}</strong> {pick(summary.nextVisit,contentLang)}</div>}
+                </div>
+              )}
               {summary.remainingGaps.length>0&&(
                 <div className="mb-4">
                   <h4 className={`font-bold mb-2 text-sm ${fk}`} style={{color:"var(--amber-900)"}}>⚠️ {L("ಹೆಚ್ಚು ಗಮನ ಬೇಕಾದ ವಿಷಯ","Areas needing attention","ध्यान देने योग्य क्षेत्र")}</h4>
@@ -501,14 +515,14 @@ function SessionContent() {
             </div>
             {/* Action buttons */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <button className="btn btn-primary" onClick={()=>router.push("/")}>{L("🏠 ಮನೆ","🏠 Home","🏠 होम")}</button>
-              <button className="btn btn-outline" onClick={()=>router.push("/dashboard")}>{L("📊 ಡ್ಯಾಶ್‌ಬೋರ್ಡ್","📊 Dashboard","📊 डैशबोर्ड")}</button>
+              <button id="log-visit-btn" className="btn btn-primary" onClick={()=>router.push(`/visits?session=${encodeURIComponent(sessionId)}`)}>{L("🏘️ ಈ ಭೇಟಿ ದಾಖಲಿಸಿ","🏘️ Log this visit","🏘️ यह दौरा दर्ज करें")}</button>
+              <button className="btn btn-outline" onClick={()=>router.push("/")}>{L("🏠 ಮನೆ","🏠 Home","🏠 होम")}</button>
             </div>
             {/* Certificate & Visit log */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <button className="btn btn-accent"
                 onClick={()=>{
-                  const name=profile?.name??"ASHA Worker";
+                  const name=user?.name??"ASHA Worker";
                   const t=session?.topic??"AMR";
                   const mods=summary.covered.length.toString();
                   const date=new Date().toISOString().split("T")[0];
@@ -516,7 +530,7 @@ function SessionContent() {
                 }}>
                 🏅 {L("ಪ್ರಮಾಣಪತ್ರ","Certificate","प्रमाणपत्र")}
               </button>
-              <button className="btn btn-outline" onClick={()=>router.push("/visits")}>{L("🏘️ ಭೇಟಿ ದಾಖಲಿಸಿ","🏘️ Log Visit","🏘️ दौरा लॉग करें")}</button>
+              <button className="btn btn-outline" onClick={()=>router.push("/#start")}>{L("➕ ಹೊಸ ಅಧಿವೇಶನ","➕ New session","➕ नया सत्र")}</button>
             </div>
           </div>
         )}

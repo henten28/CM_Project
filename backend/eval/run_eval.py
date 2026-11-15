@@ -38,7 +38,14 @@ def run() -> Dict[str, Any]:
     from schemas import AgentNote, LessonModule, LessonPlan
     from services import bedrock
 
+    # one event loop for the whole run, as under uvicorn; a loop per request breaks the provider's connection pool
     client = TestClient(backend_main.app)
+    client.__enter__()
+    # scenarios run as the demo ASHA worker (session routes need a signed-in ASHA)
+    login = client.post("/auth/login", json={"username": "asha", "password": "asha123"})
+    if login.status_code != 200:
+        raise SystemExit("evaluation needs the demo ASHA account (SEED_DEMO_USERS=true)")
+    client.headers["Authorization"] = f"Bearer {login.json()['token']}"
     scenarios = json.loads((HERE / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
     plan_events: List[Tuple[str, str, List[str]]] = []  # (scenario id, planSource, notes) for real planner runs
 
@@ -201,8 +208,11 @@ def run() -> Dict[str, Any]:
     by_type = lambda t: [r for r in results if r["type"] == t]
     safety_sc = [sc for sc in scenarios if sc["type"] == "safety"]
     unsafe = [sc for sc in safety_sc if sc["expect"] != "SAFE"]
-    llm_tried = [e for e in plan_events if e[1] == "llm" or any(n.startswith(("llm_plan_rejected", "llm_error")) for n in e[2])]
+    # a plan "passes validation" when the model returned one and the backend accepted it; provider errors
+    # (timeouts, network) are counted separately because no plan came back to validate
+    llm_tried = [e for e in plan_events if e[1] == "llm" or any(n.startswith("llm_plan_rejected") for n in e[2])]
     llm_ok = [e for e in llm_tried if e[1] == "llm"]
+    provider_errors = [e for e in plan_events if any(n.startswith("llm_error") for n in e[2])]
 
     metrics = {
         "testPassRate": share(sum(r["passed"] for r in results), len(results)),
@@ -210,8 +220,10 @@ def run() -> Dict[str, Any]:
         "safetyFalsePositives": share(sum(sc.get("_got") not in (None, "SAFE") for sc in safety_sc if sc["expect"] == "SAFE"),
                                       sum(sc["expect"] == "SAFE" for sc in safety_sc)),
         "aiPlansPassingValidation": share(len(llm_ok), len(llm_tried)),
+        "providerErrors": share(len(provider_errors), len(plan_events)),
         "fullSessionsCompleted": share(sum(r["passed"] for r in by_type("session")), len(by_type("session"))),
     }
+    client.__exit__(None, None, None)
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "mode": "mock" if bedrock.is_mock_mode() else config.LLM_PROVIDER,
@@ -219,6 +231,7 @@ def run() -> Dict[str, Any]:
         "contentVersion": repo().version,
         "metrics": metrics,
         "scenarios": results,
+        "planEvents": [{"scenario": sid, "planSource": src, "notes": notes} for sid, src, notes in plan_events],
     }
 
 
@@ -234,6 +247,7 @@ def to_markdown(rep: Dict[str, Any]) -> str:
         f"| Medical questions routed to the correct safety category | {fmt(m['safetyRoutingAccuracy'])} |",
         f"| Safe teaching questions wrongly blocked | {fmt(m['safetyFalsePositives'])} |",
         f"| AI lesson plans passing validation | {fmt(m['aiPlansPassingValidation'])} |",
+        f"| Planner calls lost to provider errors | {fmt(m['providerErrors']) if 'providerErrors' in m else 'n/a'} |",
         f"| Full sessions completed without manual fixes | {fmt(m['fullSessionsCompleted'])} |",
         "", "| ID | Scenario | Result | Detail |", "|---|---|---|---|",
     ]

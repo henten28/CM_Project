@@ -92,6 +92,8 @@ class TutorResult(BaseModel):
     feedback: List[AnswerFeedback]
     nextActivity: NextActivity
     nextQuestions: List[QuizItem]
+    agentSource: Literal["llm", "rules"] = "rules"  # who chose the reinforcement and next activity content
+    ashaTip: Optional[Bilingual] = None  # LLM teaching tip for the ASHA worker, safety-screened
 
 
 # ── safety ──
@@ -141,6 +143,9 @@ class SessionSummary(BaseModel):
     sourcesCited: List[Dict[str, str]]
     contentVersion: str
     note: Bilingual
+    agentSource: Literal["llm", "rules"] = "rules"
+    narrative: Optional[Bilingual] = None  # LLM-written recap for the ASHA and supervisor, safety-screened
+    nextVisit: Optional[Bilingual] = None  # LLM suggestion for the next household visit, safety-screened
 
 
 # ── session record and audit log ──
@@ -172,3 +177,6 @@ class SessionRecord(BaseModel):
     summary: Optional[SessionSummary] = None
     createdAt: str = Field(default_factory=now_iso)
     completedAt: Optional[str] = None
+    # the signed-in ASHA worker who ran the session (None for sessions created before sign-in existed)
+    ashaId: Optional[str] = None
+    ashaName: Optional[str] = None

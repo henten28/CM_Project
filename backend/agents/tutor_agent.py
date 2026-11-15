@@ -1,9 +1,11 @@
 from typing import Dict, List, Optional, Sequence
 
-from agents import retrieval_agent
+from pydantic import BaseModel, ConfigDict, Field
+
+from agents import llm, retrieval_agent
 from agents.content import repo
-from agents.models import (AnswerFeedback, AnswerIn, AnswerRecord, NextActivity, QuizItem, SessionRecord,
-                           TutorResult)
+from agents.models import (AnswerFeedback, AnswerIn, AnswerRecord, Bilingual, NextActivity, QuizItem,
+                           SessionRecord, TutorResult)
 from schemas import LessonPlan
 
 # fixed branching thresholds (percent of answers correct so far)
@@ -132,3 +134,94 @@ def run(session: SessionRecord, new_answers: List[AnswerIn]) -> tuple:
         feedback=feedback, nextActivity=activity, nextQuestions=[public_question(q) for q in next_qs],
     )
     return result, records
+
+
+# ── LLM tutor: chooses reinforcement and the next activity among approved candidates ──
+
+
+class _Pick(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    questionId: str
+    contentId: str
+
+
+class _Tip(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kn: str = Field(description="tip in Kannada")
+    en: str = Field(description="tip in English")
+
+
+class TutorChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reinforcement: List[_Pick] = Field(max_length=10, description="one pick per wrongly answered question")
+    nextActivityContentIds: List[str] = Field(max_length=2)
+    ashaTip: _Tip
+
+
+TUTOR_SYSTEM = (
+    "You are the Tutor Agent. Quiz scoring and the difficulty level were already decided by fixed rules; do not "
+    "change them. For each wrongly answered question choose ONE reinforcement lesson from that question's own "
+    "candidate list. Choose up to two lessons for the next activity from the activity candidates, matching the "
+    "level and the learner's gaps. Then write ashaTip: one or two short sentences for the ASHA worker on HOW to "
+    "explain the weakest concept to this household (an everyday example or a question to ask them). The tip is "
+    "about teaching, never about treatment."
+)
+
+
+def _block_line(cid: str) -> str:
+    b = repo().block_by_id[cid]
+    return f"  - {cid} | {b['difficulty']} | tags {','.join(b['conceptTags'])} | {b['title']['en']}"
+
+
+async def run_adaptive(session: SessionRecord, new_answers: List[AnswerIn]) -> tuple:
+    """Rule scoring first, then the LLM picks content among approved candidates. Returns (result, records, trace)."""
+    result, records = run(session, new_answers)
+    if not llm.enabled():
+        return result, records, {"agentSource": "rules", "note": "mock mode: rules"}
+    r = repo()
+
+    # candidates come from the retrieval agent; the model may only choose among them
+    reinf_candidates: Dict[str, List[str]] = {}
+    for f in result.feedback:
+        if f.correct:
+            continue
+        hits = retrieval_agent.search(concept_tags=[f.conceptTag], lang=session.lang, limit=8).hits
+        tagged = [h.id for h in hits if f.conceptTag.lower() in (t.lower() for t in h.conceptTags)]
+        reinf_candidates[f.questionId] = tagged or f.reinforcementContentIds
+    kind, difficulty, extra = _ACTIVITY[result.nextActivity.level]
+    tags = extra + (result.gaps or plan_tags(session.approvedPlan))
+    activity_candidates = list(dict.fromkeys(
+        result.nextActivity.contentIds
+        + retrieval_agent.search(concept_tags=tags, lang=session.lang, limit=6).contentIds))
+
+    answered = "\n".join(
+        f"  - {f.questionId} ({f.conceptTag}): {'correct' if f.correct else 'WRONG'} | "
+        f"{r.quiz_by_id[f.questionId]['question']['en']}" for f in result.feedback)
+    reinf_txt = "\n".join(f"Candidates for {qid}:\n" + "\n".join(_block_line(c) for c in cands)
+                          for qid, cands in reinf_candidates.items()) or "No wrong answers."
+    prompt = (
+        f"Session topic: {session.topic} | language: {session.lang}\n"
+        f"Score so far: {result.scorePercent}% ({result.correct}/{result.answered}) -> level {result.nextActivity.level} "
+        f"({kind})\nOpen gaps: {', '.join(result.gaps) or 'none'}\n\nAnswers just given:\n{answered}\n\n"
+        f"{reinf_txt}\n\nActivity candidates:\n" + "\n".join(_block_line(c) for c in activity_candidates)
+    )
+    choice, note = await llm.call("tutor_agent", prompt, TutorChoice, TUTOR_SYSTEM, max_tokens=700)
+    if choice is None:
+        return result, records, {"agentSource": "rules", "note": note}
+
+    rejected: List[str] = []
+    for pick in choice.reinforcement:
+        allowed = reinf_candidates.get(pick.questionId)
+        if allowed is None or pick.contentId not in allowed:
+            rejected.append(f"{pick.questionId}->{pick.contentId}")
+            continue
+        for f in result.feedback:
+            if f.questionId == pick.questionId:
+                f.reinforcementContentIds = [pick.contentId]
+    nxt = [c for c in dict.fromkeys(choice.nextActivityContentIds) if c in activity_candidates][:2]
+    rejected += [c for c in choice.nextActivityContentIds if c not in activity_candidates]
+    if nxt:
+        result.nextActivity.contentIds = nxt
+    result.ashaTip = llm.safe_bilingual(Bilingual(kn=choice.ashaTip.kn, en=choice.ashaTip.en))
+    result.agentSource = "llm"
+    return result, records, {"agentSource": "llm", "rejected": rejected, "tipScreenedOut": result.ashaTip is None}

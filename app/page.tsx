@@ -1,157 +1,77 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getProfile, type AshaProfile } from "@/lib/profile-store";
 import { getDueReviews } from "@/lib/spaced-repetition";
-import { getDashboardSessions, getContentLibrary } from "@/lib/api-client";
+import { getMySessions, startSession, type MySession } from "@/lib/api-client";
+import { useUser } from "@/lib/auth-client";
 import { useLang, tr } from "@/lib/prefs";
 import { SiteHeader, SiteFooter, KeyMessageTicker } from "@/components/SiteChrome";
 
-const T = {
-  kn: {
-    badge: "ಆರೋಗ್ಯ ಶಿಕ್ಷಣ ಅಪ್ • AMR ಜಾಗೃತಿ",
-    heroTitle: "AMR ಜಾಗೃತಿ",
-    heroSub: "ಕನ್ನಡದಲ್ಲಿ AMR ಶಿಕ್ಷಣ — ASHA ಕಾರ್ಯಕರ್ತೆಯರಿಗಾಗಿ ರಚಿಸಿದ ಸಂವಾದಾತ್ಮಕ ಅಧ್ಯಯನ ಅಪ್",
-    roleSelect: "ನಿಮ್ಮ ಪಾತ್ರ ಆಯ್ಕೆ ಮಾಡಿ",
-    asha: "ASHA ಕಾರ್ಯಕರ್ತೆ",
-    ashaDesc: "ಮರುಬಳಕೆ ಮಾಡಬಹುದಾದ AMR ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ ಮತ್ತು ಪರಿಶೀಲಿಸಿ",
-    supervisor: "ಮೇಲ್ವಿಚಾರಕ",
-    supervisorDesc: "ಅಧಿವೇಶನ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ಮತ್ತು ಅಂಕಿ-ಅಂಶ ವೀಕ್ಷಿಸಿ",
-    topicLabel: "ಇಂದಿನ ರಸಪ್ರಶ್ನೆ ವಿಷಯ",
-    time: "ಪ್ರಶ್ನೆಗಳ ಸಂಖ್ಯೆ",
-    start: "ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ →",
-    dashboard: "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ತೆರೆಯಿರಿ →",
-    disclaimer: "⚕️ ಈ ಅಪ್ ಶಿಕ್ಷಣ ಸಾಧನ ಮಾತ್ರ. ಔಷಧ ಸೂಚಿಸಲ್ಲ, ರೋಗ ನಿರ್ಣಯ ಮಾಡಲ್ಲ.",
-    profile: "ಪ್ರೊಫೈಲ್",
-    noProfile: "ಪ್ರೊಫೈಲ್ ಇಲ್ಲ",
-    setupProfile: "ಪ್ರೊಫೈಲ್ ಸ್ಥಾಪಿಸಿ",
-    welcome: "ಸ್ವಾಗತ",
-    dueReview: "📚 ಈ ವಿಷಯ ಪುನರಾವಲೋಕನ ಸಮಯ:",
-    quickLinks: "ತ್ವರಿತ ಲಿಂಕ್‌ಗಳು",
-    visits: "ಮನೆ ಭೇಟಿ",
-    settings: "ಸೆಟ್ಟಿಂಗ್ಸ್",
-    topics: [
-      { value: "general", label: "ಸಾಮಾನ್ಯ AMR ಅರಿವು" },
-      { value: "antibiotics", label: "ಪ್ರತಿಜೀವಕಗಳು ಎಂದರೇನು?" },
-      { value: "amr", label: "AMR / ಪ್ರತಿಜೀವಕ ನಿರೋಧ" },
-      { value: "prevention", label: "ಸೋಂಕು ತಡೆಗಟ್ಟುವಿಕೆ" },
-      { value: "sharing", label: "ಔಷಧ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ" },
-      { value: "case study", label: "ಕೇಸ್ ಸ್ಟಡಿ" },
-    ],
-    times: ["3","5","7","10"],
-    powered: "ಬಹು-ಏಜೆಂಟ್ AI • ಕನ್ನಡ-ಮೊದಲ • NCDC ಮೂಲ",
-  },
-  en: {
-    badge: "Health Education App • AMR Awareness",
-    heroTitle: "AMR Jagruti",
-    heroSub: "A multi-agent, Kannada-first app helping ASHA workers run interactive AMR education sessions",
-    roleSelect: "Select your role",
-    asha: "ASHA Worker",
-    ashaDesc: "Prepare and review a reusable AMR quiz",
-    supervisor: "Supervisor",
-    supervisorDesc: "View session dashboard and metrics",
-    topicLabel: "Today's quiz topic",
-    time: "Number of questions",
-    start: "Build Quiz →",
-    dashboard: "Open Dashboard →",
-    disclaimer: "⚕️ This app is an education tool only. It does not diagnose, prescribe, or suggest medicines.",
-    profile: "Profile",
-    noProfile: "No profile",
-    setupProfile: "Setup Profile",
-    welcome: "Welcome",
-    dueReview: "📚 Topics due for review:",
-    quickLinks: "Quick Links",
-    visits: "Home Visits",
-    settings: "Settings",
-    topics: [
-      { value: "general", label: "General AMR Awareness" },
-      { value: "antibiotics", label: "What are antibiotics?" },
-      { value: "amr", label: "AMR / Antimicrobial Resistance" },
-      { value: "prevention", label: "Infection Prevention" },
-      { value: "sharing", label: "Don't share medicines" },
-      { value: "case study", label: "Case Studies" },
-    ],
-    times: ["3","5","7","10"],
-    powered: "Multi-agent AI • Kannada-first • NCDC-sourced",
-  },
-  hi: {
-    badge: "स्वास्थ्य शिक्षा ऐप • AMR जागरूकता",
-    heroTitle: "AMR जागृति",
-    heroSub: "ASHA कार्यकर्ताओं के लिए एक बहु-एजेंट, कन्नड़-प्रथम AMR शिक्षा ऐप",
-    roleSelect: "अपनी भूमिका चुनें",
-    asha: "ASHA कार्यकर्ता",
-    ashaDesc: "दोबारा उपयोग योग्य AMR प्रश्नोत्तरी तैयार करें और जांचें",
-    supervisor: "पर्यवेक्षक",
-    supervisorDesc: "सत्र डैशबोर्ड और मेट्रिक्स देखें",
-    topicLabel: "आज की प्रश्नोत्तरी का विषय",
-    time: "प्रश्नों की संख्या",
-    start: "प्रश्नोत्तरी बनाएं →",
-    dashboard: "डैशबोर्ड खोलें →",
-    disclaimer: "⚕️ यह ऐप केवल एक शिक्षा उपकरण है। यह दवाएं नहीं लिखता या निदान नहीं करता।",
-    profile: "प्रोफ़ाइल",
-    noProfile: "कोई प्रोफ़ाइल नहीं",
-    setupProfile: "प्रोफ़ाइल सेटअप",
-    welcome: "स्वागत",
-    dueReview: "📚 समीक्षा के लिए विषय:",
-    quickLinks: "त्वरित लिंक",
-    visits: "घर दौरे",
-    settings: "सेटिंग्स",
-    topics: [
-      { value: "general", label: "सामान्य AMR जागरूकता" },
-      { value: "antibiotics", label: "एंटीबायोटिक्स क्या हैं?" },
-      { value: "amr", label: "AMR / रोगाणुरोधी प्रतिरोध" },
-      { value: "prevention", label: "संक्रमण रोकथाम" },
-      { value: "sharing", label: "दवाएं साझा न करें" },
-      { value: "case study", label: "केस अध्ययन" },
-    ],
-    times: ["3","5","7","10"],
-    powered: "बहु-एजेंट AI • कन्नड़-प्रथम • NCDC स्रोत",
-  },
+const TOPICS: { value: string; kn: string; en: string; hi: string; img: string }[] = [
+  { value: "general", kn: "ಸಾಮಾನ್ಯ AMR ಅರಿವು", en: "General AMR awareness", hi: "सामान्य AMR जागरूकता", img: "/img/step3.svg" },
+  { value: "antibiotics", kn: "ಪ್ರತಿಜೀವಕಗಳು ಎಂದರೇನು?", en: "What are antibiotics?", hi: "एंटीबायोटिक्स क्या हैं?", img: "/img/m1.svg" },
+  { value: "amr", kn: "AMR / ಪ್ರತಿಜೀವಕ ನಿರೋಧ", en: "AMR / resistance", hi: "AMR / प्रतिरोध", img: "/img/m2.svg" },
+  { value: "prevention", kn: "ಸೋಂಕು ತಡೆಗಟ್ಟುವಿಕೆ", en: "Infection prevention", hi: "संक्रमण रोकथाम", img: "/img/m6.svg" },
+  { value: "sharing", kn: "ಔಷಧ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ", en: "Don't share medicines", hi: "दवाएं साझा न करें", img: "/img/m4.svg" },
+  { value: "case study", kn: "ಕೇಸ್ ಸ್ಟಡಿ", en: "Case studies", hi: "केस अध्ययन", img: "/img/m7.svg" },
+];
+const DURATIONS = [5, 10, 15] as const;
+
+const STATE_LABEL: Record<string, [string, string, string]> = {
+  AWAITING_APPROVAL: ["ಅನುಮೋದನೆ ಬಾಕಿ", "Awaiting approval", "अनुमोदन बाकी"],
+  IN_PROGRESS: ["ನಡೆಯುತ್ತಿದೆ", "In progress", "जारी"],
+  SAFETY_HOLD: ["ಸುರಕ್ಷತಾ ತಡೆ", "Safety hold", "सुरक्षा रोक"],
+  COMPLETED: ["ಪೂರ್ಣ", "Completed", "पूर्ण"],
 };
 
-// picture for each session topic (original illustrations in public/img)
-const TOPIC_IMG: Record<string, string> = {
-  general: "/img/step3.svg", antibiotics: "/img/m1.svg", amr: "/img/m2.svg",
-  prevention: "/img/m6.svg", sharing: "/img/m4.svg", "case study": "/img/m7.svg",
-};
-
-export default function LandingPage() {
-  const [lang] = useLang();  // shared, saved preference; changed from the header
-  const [topic, setTopic] = useState("general");
-  const [questionCount, setQuestionCount] = useState("5");
-  const [loading, setLoading] = useState(false);
-  const [profile, setProfile] = useState<AshaProfile | null>(null);
-  const [dueReviews, setDueReviews] = useState<{ tag: string; label: Record<string,string> }[]>([]);
-  const [stats, setStats] = useState<{ sessions: number; completed: number; avg: number; lessons: number } | null>(null);
-  const router = useRouter();
-  const t = T[lang];
-  const fk = lang === "kn" ? "kn" : "";
+function HomeContent() {
+  const [lang] = useLang();
   const L = (kn: string, en: string, hi: string) => tr(lang, kn, en, hi);
+  const fk = lang === "kn" ? "kn" : "";
+  const user = useUser();
+  const router = useRouter();
+  const denied = useSearchParams().get("denied");
+  const isAsha = user?.role === "asha";
+
+  const [topic, setTopic] = useState("general");
+  const [duration, setDuration] = useState<5 | 10 | 15>(10);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<AshaProfile | null>(null);
+  const [dueReviews, setDueReviews] = useState<{ tag: string; label: Record<string, string> }[]>([]);
+  const [mine, setMine] = useState<MySession[] | null>(null);
 
   useEffect(() => {
-    // profile and review reminders live in this browser (localStorage); the language no longer comes from here
-    setProfile(getProfile());
-    setDueReviews(getDueReviews());
+    // profile extras and review reminders stay in this browser (localStorage), read after the first render
+    Promise.resolve().then(() => { setProfile(getProfile()); setDueReviews(getDueReviews()); });
   }, []);
 
   useEffect(() => {
-    // live figures for the statistics strip; the strip hides itself if the backend is down
-    Promise.all([getDashboardSessions(), getContentLibrary()]).then(([s, lib]) => {
-      const done = s.filter((x) => x.sessionCompleted);
-      setStats({
-        sessions: s.length, completed: done.length,
-        avg: done.length ? Math.round(done.reduce((n, x) => n + x.quizScore, 0) / done.length) : 0,
-        lessons: lib.modules.reduce((n, m) => n + m.blocks.length, 0),
-      });
-    }).catch(() => setStats(null));
-  }, []);
+    if (isAsha) getMySessions().then(setMine).catch(() => setMine([]));
+  }, [isAsha]);
 
-  function handleStart() {
-    setLoading(true);
-    router.push(`/quiz-builder?topic=${encodeURIComponent(topic)}&lang=${lang}&questionCount=${questionCount}`);
+  async function handleStart() {
+    setLoading(true); setError(null);
+    try {
+      // earlier quiz gaps go to the planning agent, which puts them first
+      const data = await startSession({ topic, durationMinutes: duration, lang, priorGaps: dueReviews.map((r) => r.tag) });
+      router.push(`/session?id=${encodeURIComponent(data.sessionId)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start the session");
+      setLoading(false);
+    }
   }
+
+  const topicLabel = (value: string) => {
+    const t = TOPICS.find((x) => x.value === value);
+    return t ? tr(lang, t.kn, t.en, t.hi) : value;
+  };
+  const done = (mine ?? []).filter((s) => s.state === "COMPLETED");
+  const scored = done.filter((s) => s.quizScore !== null);
+  const avg = scored.length ? Math.round(scored.reduce((n, s) => n + (s.quizScore ?? 0), 0) / scored.length) : null;
 
   const badges = [
     { cls: "fb1", icon: "🔤", bg: "#e3eefc", label: L("ಕನ್ನಡ-ಮೊದಲ", "Kannada-first", "कन्नड़-प्रथम") },
@@ -160,38 +80,24 @@ export default function LandingPage() {
     { cls: "fb4", icon: "🤖", bg: "#fff3cd", label: L("4 ತಜ್ಞ ಏಜೆಂಟ್", "4 specialist agents", "4 विशेषज्ञ एजेंट") },
   ];
 
+  // Figure 1 of the proposal
   const steps = [
-    { c: "#6a4c93", img: "/img/step1.svg", title: L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare a quiz", "प्रश्नोत्तरी तैयार करें"),
-      text: L("ಆಯ್ದ ವಿಷಯಕ್ಕೆ ಮೂಲಗಳ ಆಧಾರದ ಮೇಲೆ ಪ್ರಶ್ನೆಗಳ ಬ್ಯಾಚ್ ರಚಿಸಿ.",
-              "Generate a source-grounded batch of questions for the selected topic.",
-              "चुने हुए विषय के लिए स्रोत-आधारित प्रश्नों का सेट बनाएं।") },
+    { c: "#6a4c93", img: "/img/step1.svg", title: L("ಯೋಜನಾ ಏಜೆಂಟ್", "Planning agent", "योजना एजेंट"),
+      text: L("ವಿಷಯ, ಸಮಯ ಮತ್ತು ಹಿಂದಿನ ಕೊರತೆಗಳಿಗೆ ತಕ್ಕಂತೆ ಅನುಮೋದಿತ ಪಾಠಗಳಿಂದ ಯೋಜನೆ ರಚಿಸುತ್ತದೆ.",
+              "Builds a lesson plan from approved lessons for the topic, time and earlier gaps.",
+              "विषय, समय और पिछली कमियों के अनुसार स्वीकृत पाठों से योजना बनाता है।") },
     { c: "#e07a2f", img: "/img/step2.svg", title: L("ASHA ಪರಿಶೀಲನೆ", "ASHA reviews", "ASHA समीक्षा"),
-      text: L("ಪ್ರಕಟಿಸುವ ಮೊದಲು ಎಲ್ಲಾ ಪ್ರಶ್ನೆಗಳು, ಉತ್ತರಗಳು ಮತ್ತು ವಿವರಣೆಗಳನ್ನು ಒಟ್ಟಿಗೆ ಪರಿಶೀಲಿಸಿ.",
-              "Review all questions, answer keys and explanations together before publishing.",
-              "प्रकाशित करने से पहले सभी प्रश्न, उत्तर और व्याख्या एक साथ जांचें।") },
-    { c: "#1d3557", img: "/img/step3.svg", title: L("ಪ್ರಕಟಿಸಿ", "Publish a version", "संस्करण प्रकाशित करें"),
-      text: L("ಅನುಮೋದಿತ ರಸಪ್ರಶ್ನೆ ಮರುಬಳಕೆಗಾಗಿ ಆವೃತ್ತಿಯಾಗಿ ಉಳಿಯುತ್ತದೆ.",
-              "The approved quiz is saved as a reusable published version.",
-              "स्वीकृत प्रश्नोत्तरी दोबारा उपयोग के लिए प्रकाशित संस्करण के रूप में सहेजी जाती है।") },
-    { c: "#2d6a4f", img: "/img/step4.svg", title: L("ಕಲಿಯುವವರ ಪ್ರಯತ್ನ", "Learner attempt", "सीखने वाले का प्रयास"),
-      text: L("ಕಲಿಯುವವರು ಎಲ್ಲಾ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸುತ್ತಾರೆ; ಸರ್ವರ್ ಅಂಕ ಮತ್ತು ವಿವರಣೆಗಳನ್ನು ತೋರಿಸುತ್ತದೆ.",
-              "Learners answer the full set; the server grades it and shows explanations.",
-              "सीखने वाले सभी प्रश्नों के उत्तर देते हैं; सर्वर जांचकर व्याख्या दिखाता है।") },
-  ];
-
-  const services = [
-    { href: "/#start", img: "/img/step3.svg", title: L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare a quiz", "प्रश्नोत्तरी तैयार करें"),
-      text: L("ಪ್ರಶ್ನೆಗಳ ಸಂಪೂರ್ಣ ಬ್ಯಾಚ್ ಪರಿಶೀಲಿಸಿ ಪ್ರಕಟಿಸಿ.", "Review the full question batch and publish it for reuse.", "सभी प्रश्नों की समीक्षा करके पुनः उपयोग के लिए प्रकाशित करें।") },
-    { href: "/quiz", img: "/img/m7.svg", title: L("ಪ್ರಕಟಿತ ರಸಪ್ರಶ್ನೆಗಳು", "Published quizzes", "प्रकाशित प्रश्नोत्तरी"),
-      text: L("ಪ್ರಕಟಿತ ಆವೃತ್ತಿಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸಿ.", "Choose a published version and attempt every question.", "प्रकाशित संस्करण चुनें और सभी प्रश्नों के उत्तर दें।") },
-    { href: "/learn", img: "/img/m7.svg", title: L("ಕಲಿಕಾ ಗ್ರಂಥಾಲಯ", "Learning library", "सीखने की लाइब्रेरी"),
-      text: L("ಎಲ್ಲಾ ಅನುಮೋದಿತ ಪಾಠಗಳನ್ನು ನೋಡಿ ಮತ್ತು ಕೇಳಿ.", "Browse every approved lesson and listen to it.", "सभी स्वीकृत पाठ देखें और सुनें।") },
-    { href: "/visits", img: "/img/m5.svg", title: L("ಮನೆ ಭೇಟಿ", "Household visits", "घर दौरे"),
-      text: L("ಭೇಟಿ ನೀಡಿದ ಕುಟುಂಬಗಳು ಮತ್ತು ವಿಷಯಗಳನ್ನು ದಾಖಲಿಸಿ.", "Log families visited and topics covered.", "जिन परिवारों से मिले और विषय दर्ज करें।") },
-    { href: "/dashboard", img: "/img/step4.svg", title: L("ಮೇಲ್ವಿಚಾರಕ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್", "Supervisor dashboard", "पर्यवेक्षक डैशबोर्ड"),
-      text: L("ಅಧಿವೇಶನಗಳು, ರೆಫರಲ್ ಕಾರ್ಯಗಳು ಮತ್ತು ಮೌಲ್ಯಮಾಪನ ಫಲಿತಾಂಶ.", "Sessions, referral tasks and evaluation results.", "सत्र, रेफरल कार्य और मूल्यांकन परिणाम।") },
-    { href: "/profile", img: "/img/step2.svg", title: L("ನನ್ನ ಪ್ರೊಫೈಲ್", "My profile", "मेरी प्रोफ़ाइल"),
-      text: L("ನಿಮ್ಮ ಹೆಸರು, ಬ್ಲಾಕ್ ಮತ್ತು ಜಿಲ್ಲೆ.", "Your name, block and district.", "आपका नाम, ब्लॉक और जिला।") },
+      text: L("ASHA ಕಾರ್ಯಕರ್ತೆ ಯೋಜನೆಯನ್ನು ಅನುಮೋದಿಸುತ್ತಾರೆ ಅಥವಾ ತಿರಸ್ಕರಿಸುತ್ತಾರೆ.",
+              "The ASHA worker approves or rejects the plan before anything is taught.",
+              "कुछ भी सिखाने से पहले ASHA योजना को स्वीकृत या अस्वीकार करती हैं।") },
+    { c: "#1d3557", img: "/img/step3.svg", title: L("ಶಿಕ್ಷಕ + ಹುಡುಕಾಟ ಏಜೆಂಟ್", "Tutor + retrieval agents", "ट्यूटर + पुनर्प्राप्ति एजेंट"),
+      text: L("ಪಾಠ ಮತ್ತು ರಸಪ್ರಶ್ನೆ; ತಪ್ಪು ಉತ್ತರಗಳಿಗೆ ಅನುಮೋದಿತ ಪುನರ್ಬಲನ. ಅಂಕ ಸ್ಥಿರ ನಿಯಮಗಳಿಂದ.",
+              "Lesson and checkpoint quiz; wrong answers get approved reinforcement. Fixed rules score.",
+              "पाठ और प्रश्नोत्तरी; गलत उत्तरों पर स्वीकृत सामग्री। स्कोर तय नियमों से।") },
+    { c: "#2d6a4f", img: "/img/step4.svg", title: L("ಸಾರಾಂಶ ಏಜೆಂಟ್", "Summary agent", "सारांश एजेंट"),
+      text: L("ಕಲಿತದ್ದು, ಉಳಿದ ಕೊರತೆಗಳು ಮತ್ತು ಮುಂದಿನ ಭೇಟಿಯ ಸಲಹೆ ಮೇಲ್ವಿಚಾರಕರಿಗೆ ತಲುಪುತ್ತದೆ.",
+              "What was learned, open gaps and a next-visit suggestion reach the supervisor.",
+              "क्या सीखा, बची कमियां और अगली मुलाकात का सुझाव पर्यवेक्षक तक पहुंचता है।") },
   ];
 
   return (
@@ -199,17 +105,31 @@ export default function LandingPage() {
       <SiteHeader />
       <KeyMessageTicker />
       <main>
+        {denied && (
+          <div className="wrap" style={{ paddingTop: 16 }}>
+            <div className={`notice-bar ${fk}`} role="alert">
+              {L("ಆ ಪುಟ ನಿಮ್ಮ ಪಾತ್ರಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ.", "That page is not available for your role.", "वह पेज आपकी भूमिका के लिए उपलब्ध नहीं है।")} ({denied})
+            </div>
+          </div>
+        )}
+
         {/* Hero */}
         <section className="hero2">
           <div className="wrap hero2-grid">
             <div>
-              <span className="chip"><span>🌿</span><span className={fk}>{t.badge}</span></span>
+              <span className="chip"><span>🌿</span><span className={fk}>{L("ಆರೋಗ್ಯ ಶಿಕ್ಷಣ ಅಪ್ • AMR ಜಾಗೃತಿ", "Health education app • AMR awareness", "स्वास्थ्य शिक्षा ऐप • AMR जागरूकता")}</span></span>
               <h1 className={fk}>{L("ಒಂದೊಂದೇ ಮನೆಯಲ್ಲಿ AMR ಅರಿವು", "Bridging the AMR awareness gap, one household at a time", "हर घर तक AMR जागरूकता")}</h1>
-              <p className={fk}>{t.heroSub}</p>
+              <p className={fk}>{L("ASHA ಕಾರ್ಯಕರ್ತೆಯರು ಮನೆ ಭೇಟಿಯಲ್ಲಿ ಚಿಕ್ಕ, ಸಂವಾದಾತ್ಮಕ AMR ಅಧಿವೇಶನ ನಡೆಸಲು ಸಹಾಯ ಮಾಡುವ ಬಹು-ಏಜೆಂಟ್, ಕನ್ನಡ-ಮೊದಲ ಅಪ್.",
+                "A multi-agent, Kannada-first app that helps ASHA workers run short, interactive AMR sessions during household visits.",
+                "एक बहु-एजेंट, कन्नड़-प्रथम ऐप जो ASHA कार्यकर्ताओं को घर के दौरों में छोटे AMR सत्र चलाने में मदद करता है।")}</p>
               <div className="hero2-cta">
-                <a href="#start" className={`btn btn-primary btn-lg ${fk}`}>{t.start}</a>
+                {isAsha ? (
+                  <a href="#start" className={`btn btn-primary btn-lg ${fk}`}>{L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ →", "Start a session →", "सत्र शुरू करें →")}</a>
+                ) : user === null ? (
+                  <Link href="/login" className={`btn btn-primary btn-lg ${fk}`}>{L("ASHA / ಮೇಲ್ವಿಚಾರಕ ಸೈನ್ ಇನ್", "ASHA / supervisor sign in", "ASHA / पर्यवेक्षक साइन इन")}</Link>
+                ) : null}
+                <Link href="/quiz" className={`btn btn-outline btn-lg ${fk}`}>✅ {L("ರಸಪ್ರಶ್ನೆ ತೆಗೆದುಕೊಳ್ಳಿ", "Take a quiz", "प्रश्नोत्तरी दें")}</Link>
                 <Link href="/learn" className={`btn btn-outline btn-lg ${fk}`}>📚 {L("ಕಲಿಕಾ ಗ್ರಂಥಾಲಯ", "Learning library", "सीखने की लाइब्रेरी")}</Link>
-                <Link href="/quiz" className={`btn btn-outline btn-lg ${fk}`}>✅ {L("ಪ್ರಕಟಿತ ರಸಪ್ರಶ್ನೆಗಳು", "Published quizzes", "प्रकाशित प्रश्नोत्तरी")}</Link>
               </div>
             </div>
             <div className="hero-art">
@@ -222,76 +142,126 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Prepare a reusable quiz */}
-        <section id="start" className="section">
-          <div className="wrap">
-            <h2 className={`section-title ${fk}`}>{L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare a quiz", "प्रश्नोत्तरी तैयार करें")}</h2>
-            <p className={`section-sub ${fk}`}>{t.ashaDesc}</p>
-            <div className="start-panel">
-              <div className="card-elevated">
-                <label className={`block text-sm font-bold mb-3 ${fk}`} style={{ color: "var(--primary)" }}>{t.topicLabel}</label>
-                <div className="topic-grid" role="radiogroup" aria-label={t.topicLabel}>
-                  {t.topics.map((tp) => (
-                    <button key={tp.value} id={`topic-${tp.value.replace(" ", "-")}`} role="radio" aria-checked={topic === tp.value}
-                      className={`topic-card ${topic === tp.value ? "on" : ""} ${fk}`} onClick={() => setTopic(tp.value)}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={TOPIC_IMG[tp.value]} alt="" />{tp.label}
-                    </button>
-                  ))}
+        {/* ASHA: start a household session */}
+        {isAsha && (
+          <section id="start" className="section">
+            <div className="wrap">
+              <h2 className={`section-title ${fk}`}>{L("ಮನೆ ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ", "Start a household session", "घर पर सत्र शुरू करें")}</h2>
+              <p className={`section-sub ${fk}`}>{L("ವಿಷಯ ಮತ್ತು ಸಮಯ ಆಯ್ಕೆ ಮಾಡಿ. ಭಾಷೆಯನ್ನು ಮೇಲಿನ ಪಟ್ಟಿಯಲ್ಲಿ ಬದಲಾಯಿಸಿ.",
+                "Pick a topic and how long you have. Change the language from the bar at the top.",
+                "विषय और समय चुनें। भाषा ऊपर की पट्टी से बदलें।")}</p>
+              <div className="start-panel">
+                <div className="card-elevated">
+                  <label className={`block text-sm font-bold mb-3 ${fk}`} style={{ color: "var(--primary)" }}>{L("ಇಂದಿನ ವಿಷಯ", "Today's topic", "आज का विषय")}</label>
+                  <div className="topic-grid" role="radiogroup" aria-label="Topic">
+                    {TOPICS.map((tp) => (
+                      <button key={tp.value} id={`topic-${tp.value.replace(" ", "-")}`} role="radio" aria-checked={topic === tp.value}
+                        className={`topic-card ${topic === tp.value ? "on" : ""} ${fk}`} onClick={() => setTopic(tp.value)}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={tp.img} alt="" />{tr(lang, tp.kn, tp.en, tp.hi)}
+                      </button>
+                    ))}
+                  </div>
+                  <label className={`block text-sm font-bold mt-4 mb-2 ${fk}`} style={{ color: "var(--primary)" }}>{L("ಲಭ್ಯ ಸಮಯ (ನಿಮಿಷ)", "Time available (minutes)", "उपलब्ध समय (मिनट)")}</label>
+                  <div className="flex gap-2">
+                    {DURATIONS.map((m) => (
+                      <button key={m} id={`time-${m}`} aria-pressed={duration === m} className={`time-btn ${duration === m ? "on" : ""}`} onClick={() => setDuration(m)}>{m}</button>
+                    ))}
+                  </div>
+                  {error && <div className="login-error mt-3" role="alert">{error}</div>}
+                  <button id="start-session-btn" className={`btn btn-primary btn-full btn-lg mt-4 ${fk}`} onClick={handleStart} disabled={loading}>
+                    {loading ? <span className="spinner" /> : L("ಅಧಿವೇಶನ ಪ್ರಾರಂಭಿಸಿ →", "Start session →", "सत्र शुरू करें →")}
+                  </button>
+                  <p className={`text-xs text-muted mt-2 ${fk}`}>{L("ಯೋಜನಾ ಏಜೆಂಟ್ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧಪಡಿಸುತ್ತದೆ; ನೀವು ಅನುಮೋದಿಸಿದ ನಂತರವೇ ಪಾಠ ಆರಂಭ.",
+                    "The planning agent drafts a lesson plan; teaching starts only after you approve it.",
+                    "योजना एजेंट पाठ योजना बनाता है; आपकी स्वीकृति के बाद ही पढ़ाई शुरू होती है।")}</p>
                 </div>
-                <label className={`block text-sm font-bold mt-4 mb-2 ${fk}`} style={{ color: "var(--primary)" }}>{t.time}</label>
-                <div className="flex gap-2">
-                  {t.times.map((m) => (
-                    <button key={m} id={`count-${m}`} aria-pressed={questionCount === m} className={`time-btn ${questionCount === m ? "on" : ""}`} onClick={() => setQuestionCount(m)}>{m}</button>
-                  ))}
-                </div>
-                <button id="start-quiz-btn" className={`btn btn-primary btn-full btn-lg mt-4 ${fk}`} onClick={handleStart} disabled={loading}>
-                  {loading ? <span className="spinner" /> : t.start}
-                </button>
-              </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {profile ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div className="card" style={{ background: "linear-gradient(135deg,var(--green-50),var(--amber-100))", border: "1.5px solid var(--green-600)" }}>
-                    <div className={`font-bold text-primary ${fk}`}>👋 {t.welcome}, {profile.name}</div>
-                    <div className="text-xs text-muted mt-1">{profile.block}, {profile.district} · {L("ಒಟ್ಟು ಅಧಿವೇಶನ", "Sessions", "कुल सत्र")}: {profile.totalSessions}</div>
-                  </div>
-                ) : (
-                  <div className="card" style={{ border: "1.5px dashed var(--border)", textAlign: "center" }}>
-                    <div className={`text-sm text-muted ${fk}`}>{t.noProfile}</div>
-                    <Link href="/profile" className={`btn btn-primary btn-sm mt-2 ${fk}`}>{t.setupProfile}</Link>
-                  </div>
-                )}
-                {dueReviews.length > 0 && (
-                  <div className="card" style={{ background: "#fff8e1", border: "1.5px solid var(--amber-500)" }}>
-                    <div className={`text-sm font-bold mb-2 ${fk}`} style={{ color: "var(--amber-900)" }}>{t.dueReview}</div>
-                    <div className="flex gap-1" style={{ flexWrap: "wrap" }}>
-                      {dueReviews.map((r) => (
-                        <span key={r.tag} className={`badge badge-amber ${fk}`} style={{ cursor: "pointer" }}
-                          onClick={() => setTopic(r.tag.includes("AMR") || r.tag === "resistance" ? "amr" : r.tag)}>
-                          {r.label[lang] ?? r.tag}
-                        </span>
-                      ))}
+                    <div className={`font-bold text-primary ${fk}`}>👋 {L("ಸ್ವಾಗತ", "Welcome", "स्वागत")}, {user?.name}</div>
+                    <div className="text-xs text-muted mt-1">
+                      {[profile?.block || user?.block, profile?.district || user?.district].filter(Boolean).join(", ")}
+                      {mine && <> · {L("ಅಧಿವೇಶನ", "Sessions", "सत्र")}: {mine.length} · {L("ಪೂರ್ಣ", "Completed", "पूर्ण")}: {done.length}{avg !== null && <> · {L("ಸರಾಸರಿ", "Avg", "औसत")} {avg}%</>}</>}
                     </div>
                   </div>
-                )}
-                <div className="card">
-                  <div className={`font-bold text-sm mb-2 ${fk}`} style={{ color: "var(--primary)" }}>📊 {t.supervisor}</div>
-                  <div className={`text-sm text-muted mb-3 ${fk}`}>{t.supervisorDesc}</div>
-                  <Link id="open-dashboard-btn" href="/dashboard" className={`btn btn-outline btn-full ${fk}`}>{t.dashboard}</Link>
+                  {dueReviews.length > 0 && (
+                    <div className="card" style={{ background: "#fff8e1", border: "1.5px solid var(--amber-500)" }}>
+                      <div className={`text-sm font-bold mb-2 ${fk}`} style={{ color: "var(--amber-900)" }}>📚 {L("ಪುನರಾವಲೋಕನ ಬಾಕಿ (ಯೋಜನೆಗೆ ಸೇರಿಸಲಾಗುತ್ತದೆ):", "Due for review (added to the plan):", "समीक्षा बाकी (योजना में जोड़ा जाएगा):")}</div>
+                      <div className="flex gap-1" style={{ flexWrap: "wrap" }}>
+                        {dueReviews.map((r) => <span key={r.tag} className={`badge badge-amber ${fk}`}>{r.label[lang] ?? r.tag}</span>)}
+                      </div>
+                    </div>
+                  )}
+                  <div className="card">
+                    <div className={`font-bold text-sm mb-2 ${fk}`} style={{ color: "var(--primary)" }}>🕘 {L("ನನ್ನ ಇತ್ತೀಚಿನ ಅಧಿವೇಶನಗಳು", "My recent sessions", "मेरे हाल के सत्र")}</div>
+                    {mine === null ? <span className="spinner" /> : mine.length === 0 ? (
+                      <p className={`text-sm text-muted ${fk}`}>{L("ಇನ್ನೂ ಯಾವ ಅಧಿವೇಶನವೂ ಇಲ್ಲ.", "No sessions yet.", "अभी कोई सत्र नहीं।")}</p>
+                    ) : (
+                      <ul className="recent-list">
+                        {mine.slice(0, 5).map((s) => (
+                          <li key={s.id}>
+                            <Link href={`/session?id=${encodeURIComponent(s.id)}`}>
+                              <span className={fk}>{topicLabel(s.topic)}</span>
+                              <span className="text-xs text-muted"> · {s.durationMin} min · {tr(lang, ...(STATE_LABEL[s.state] ?? [s.state, s.state, s.state]))}{s.quizScore !== null ? ` · ${s.quizScore}%` : ""}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="card">
+                    <div className={`font-bold text-sm mb-2 ${fk}`} style={{ color: "var(--primary)" }}>📝 {L("ಹಂಚಿಕೊಳ್ಳಲು ರಸಪ್ರಶ್ನೆ", "A quiz to share", "साझा करने के लिए प्रश्नोत्तरी")}</div>
+                    <div className={`text-sm text-muted mb-3 ${fk}`}>{L("ಮೂಲ ದಾಖಲೆಗಳಿಂದ AI ರಸಪ್ರಶ್ನೆ ರಚಿಸಿ, ಪರಿಶೀಲಿಸಿ, ಪ್ರಕಟಿಸಿ ಮತ್ತು ಲಿಂಕ್ ಕುಟುಂಬಗಳಿಗೆ ಕಳುಹಿಸಿ.",
+                      "Have the AI draft a quiz from source documents, review it, publish it and send the link to households.",
+                      "स्रोत दस्तावेज़ों से AI प्रश्नोत्तरी बनवाएं, जांचें, प्रकाशित करें और लिंक परिवारों को भेजें।")}</div>
+                    <Link href="/quiz-builder" className={`btn btn-outline btn-full ${fk}`}>{L("ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ →", "Prepare a quiz →", "प्रश्नोत्तरी बनाएं →")}</Link>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        {/* How a session works */}
+        {/* Signed out: who uses the app */}
+        {user === null && (
+          <section id="start" className="section">
+            <div className="wrap">
+              <h2 className={`section-title ${fk}`}>{L("ಯಾರಿಗಾಗಿ?", "Who is it for?", "किसके लिए?")}</h2>
+              <div className="services" style={{ marginTop: 20 }}>
+                <Link href="/login?next=/" className="service-card">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/img/step1.svg" alt="" />
+                  <h3 className={fk}>👩‍⚕️ {L("ASHA ಕಾರ್ಯಕರ್ತೆ", "ASHA worker", "ASHA कार्यकर्ता")}</h3>
+                  <p className={fk}>{L("ಸೈನ್ ಇನ್ ಮಾಡಿ ಮನೆ ಅಧಿವೇಶನ ನಡೆಸಿ, ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ, ಭೇಟಿ ದಾಖಲಿಸಿ.", "Sign in to run household sessions, prepare quizzes and log visits.", "साइन इन करके सत्र चलाएं, प्रश्नोत्तरी बनाएं, दौरे दर्ज करें।")}</p>
+                  <span className="go">→</span>
+                </Link>
+                <Link href="/login?next=/dashboard" className="service-card">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/img/step4.svg" alt="" />
+                  <h3 className={fk}>🧑‍💼 {L("ಮೇಲ್ವಿಚಾರಕ", "Supervisor", "पर्यवेक्षक")}</h3>
+                  <p className={fk}>{L("ಸೈನ್ ಇನ್ ಮಾಡಿ ಎಲ್ಲಾ ಅಧಿವೇಶನಗಳು, ಭೇಟಿಗಳು ಮತ್ತು ರೆಫರಲ್‌ಗಳನ್ನು ನೋಡಿ.", "Sign in to see all sessions, visits and referrals.", "साइन इन करके सभी सत्र, दौरे और रेफरल देखें।")}</p>
+                  <span className="go">→</span>
+                </Link>
+                <Link href="/quiz" className="service-card">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/img/m5.svg" alt="" />
+                  <h3 className={fk}>🏠 {L("ಕುಟುಂಬದ ಸದಸ್ಯರು", "Household member", "परिवार के सदस्य")}</h3>
+                  <p className={fk}>{L("ಖಾತೆ ಬೇಕಿಲ್ಲ: ASHA ಕೊಟ್ಟ ರಸಪ್ರಶ್ನೆ ತೆಗೆದುಕೊಳ್ಳಿ ಅಥವಾ ಪಾಠಗಳನ್ನು ಓದಿ.", "No account needed: take the quiz your ASHA shared, or read the lessons.", "खाते की ज़रूरत नहीं: ASHA की दी प्रश्नोत्तरी दें या पाठ पढ़ें।")}</p>
+                  <span className="go">→</span>
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* How a session works (proposal Figure 1) */}
         <section className="section alt">
           <div className="wrap">
             <h2 className={`section-title ${fk}`}>{L("ಅಧಿವೇಶನ ಹೇಗೆ ನಡೆಯುತ್ತದೆ", "How a session works", "सत्र कैसे चलता है")}</h2>
-            <p className={`section-sub ${fk}`}>{L("ನಾಲ್ಕು ತಜ್ಞ ಏಜೆಂಟ್‌ಗಳು; ಸುರಕ್ಷತಾ ನಿಯಂತ್ರಕ ಪ್ರತಿ ಹಂತದಲ್ಲೂ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ.",
-              "Four specialist agents, with a safety controller watching every step.",
-              "चार विशेषज्ञ एजेंट, और हर चरण पर सुरक्षा नियंत्रक।")}</p>
+            <p className={`section-sub ${fk}`}>{L("ನಾಲ್ಕು ತಜ್ಞ ಏಜೆಂಟ್‌ಗಳು; ಸ್ಥಿರ ನಿಯಮಗಳ ಸುರಕ್ಷತಾ ನಿಯಂತ್ರಕ ಪ್ರತಿ ಪ್ರಶ್ನೆಯನ್ನು ಮೊದಲು ಪರಿಶೀಲಿಸುತ್ತದೆ.",
+              "Four specialist agents. A fixed-rule safety controller checks every question first, and personal medical questions get a fixed referral message.",
+              "चार विशेषज्ञ एजेंट। तय नियमों वाला सुरक्षा नियंत्रक हर प्रश्न पहले जांचता है।")}</p>
             <div className="steps4">
               {steps.map((s, i) => (
                 <div key={s.img} className="step4" style={{ ["--c" as string]: s.c }}>
@@ -304,45 +274,6 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
-
-        {/* Services */}
-        <section className="section">
-          <div className="wrap">
-            <h2 className={`section-title ${fk}`}>{L("ನೀವು ಏನು ಮಾಡಬಹುದು", "What you can do", "आप क्या कर सकते हैं")}</h2>
-            <p className={`section-sub ${fk}`}>{t.disclaimer}</p>
-            <div className="services">
-              {services.map((s) => (
-                <Link key={s.href} href={s.href} className="service-card">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.img} alt="" />
-                  <h3 className={fk}>{s.title}</h3>
-                  <p className={fk}>{s.text}</p>
-                  <span className="go">→</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Live statistics */}
-        {stats && (
-          <section className="section alt" id="stats">
-            <div className="wrap">
-              <h2 className={`section-title ${fk}`}>{L("ಒಂದು ನೋಟದಲ್ಲಿ", "At a glance", "एक नज़र में")}</h2>
-              <p className={`section-sub ${fk}`}>{L("ಈ ಅಪ್‌ನ ನೇರ ಅಂಕಿ-ಅಂಶಗಳು", "Live figures from this app", "इस ऐप के लाइव आंकड़े")}</p>
-              <div className="stat-band">
-                {[
-                  [stats.sessions, L("ನಡೆಸಿದ ಅಧಿವೇಶನ", "Sessions run", "चलाए गए सत्र")],
-                  [stats.completed, L("ಪೂರ್ಣಗೊಂಡ ಅಧಿವೇಶನ", "Sessions completed", "पूर्ण सत्र")],
-                  [`${stats.avg}%`, L("ಸರಾಸರಿ ರಸಪ್ರಶ್ನೆ ಅಂಕ", "Average quiz score", "औसत प्रश्नोत्तरी स्कोर")],
-                  [stats.lessons, L("ಅನುಮೋದಿತ ಪಾಠಗಳು", "Approved lessons", "स्वीकृत पाठ")],
-                ].map(([n, l]) => (
-                  <div key={String(l)} className="stat-box"><div className="n">{n}</div><div className={`l ${fk}`}>{l}</div></div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Helplines */}
         <section className="section">
@@ -362,4 +293,8 @@ export default function LandingPage() {
       <SiteFooter />
     </div>
   );
+}
+
+export default function LandingPage() {
+  return <Suspense fallback={<div className="portal"><main className="page-body">Loading…</main></div>}><HomeContent /></Suspense>;
 }

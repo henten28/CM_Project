@@ -87,9 +87,9 @@ function LearnerQuizContent() {
   return <div className="portal portal-page">
     <SiteHeader />
     <PageBanner img="/img/step3.svg" title={quiz ? quiz.title : "Published quizzes"}
-      sub={quiz ? `${quiz.topic} · ${quiz.difficulty} · version ${quiz.version}` : "Choose a reviewed quiz and attempt the full question set."} />
+      sub={quiz ? `${quiz.topic} · ${quiz.difficulty}` : "Quizzes reviewed and published by ASHA workers. No account needed."} />
     <main className="page-body ql-page" style={{ maxWidth: 900 }}>
-      <div className="ql-nav"><Link className="pill-btn" href="/">Home</Link><Link className="pill-btn" href="/quiz-builder">ASHA quiz builder</Link></div>
+      <div className="ql-nav"><Link className="pill-btn" href="/">Home</Link><Link className="pill-btn" href="/quiz">All quizzes</Link><Link className="pill-btn" href="/learn">Learning library</Link></div>
       {loading && <p role="status" className="card mt-3">Loading…</p>}
       {error && <div role="alert" className="ql-error mt-3">{error}{quizId && !quiz && <p className="text-sm mt-2">Only published quizzes can be opened here. If this is a draft, ask the ASHA worker to publish it first.</p>}</div>}
 
@@ -102,7 +102,7 @@ function LearnerQuizContent() {
       </section>}
 
       {quiz && !loading && <>
-        <div className="ql-meta card mt-3"><strong>{quiz.topic}</strong><span>{quiz.lang.toUpperCase()} · {quiz.difficulty} · {quiz.questionCount} questions · immutable version {quiz.version}</span></div>
+        <div className="ql-meta card mt-3"><strong>{quiz.topic}</strong><span>{quiz.lang.toUpperCase()} · {quiz.difficulty} · {quiz.questionCount} questions</span></div>
 
         {attempt?.status === "COMPLETED" && attempt.result && <section className="mt-4" aria-label="Quiz results">
           <div className="ql-result card-elevated"><strong>Your score: {attempt.result.scorePercent}%</strong><span>{attempt.result.correct} correct out of {attempt.result.total}</span></div>
@@ -118,14 +118,14 @@ function LearnerQuizContent() {
               {safeHttpUrl(citation.url) && <a href={safeHttpUrl(citation.url) ?? undefined} target="_blank" rel="noreferrer">Open source</a>}
             </div>)}</div>}
           </article>)}
-          <button className="btn btn-primary mt-3" type="button" disabled={busy} onClick={startAttempt}>{busy ? "Starting…" : "Start an independent new attempt"}</button>
+          <button className="btn btn-primary mt-3" type="button" disabled={busy} onClick={startAttempt}>{busy ? "Starting…" : "Try again"}</button>
         </section>}
 
         {(!attempt || attempt.status === "IN_PROGRESS") && <section className="mt-4" aria-labelledby="ql-attempt-title">
           {!attempt ? <div className="card-elevated ql-start"><h2 id="ql-attempt-title">Ready to begin?</h2><p>This attempt uses the published version shown above. Your answers are graded by the server after you submit the entire set.</p>
             <button type="button" className="btn btn-primary mt-3" disabled={busy} onClick={startAttempt}>{busy ? "Starting…" : "Start this quiz"}</button></div> : <>
             <h2 id="ql-attempt-title">Answer all {quiz.questions.length} questions</h2>
-            <p className="text-sm text-muted mt-1">Your attempt is saved as {attempt.id}. Answers are not saved until you submit; if you reload first, reopen this attempt and select them again.</p>
+            <p className="text-sm text-muted mt-1">Choose one answer for each question, then press Submit. You will see the correct answers and explanations afterwards.</p>
             {quiz.questions.map((question, index) => <fieldset className="card-elevated ql-question" key={question.id}>
               <legend>{index + 1}. {question.question}</legend>
               {question.options.map((option, optionIndex) => <label className="ql-option" key={`${optionIndex}-${option}`}>
@@ -140,8 +140,8 @@ function LearnerQuizContent() {
     </main>
     <SiteFooter />
     <style jsx>{`
-      .ql-page { display:grid; gap:12px; }
-      .ql-nav { display:flex; gap:8px; flex-wrap:wrap; }
+      .ql-page { display:grid; gap:12px; align-content:start; }
+      .ql-nav { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
       .ql-catalog h2 { color:var(--primary); font-size:1.15rem; margin-bottom:12px; }
       .ql-item { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; padding:16px; margin:10px 0; }
       .ql-item h3 { color:var(--primary); font-size:1rem; }
@@ -151,7 +151,8 @@ function LearnerQuizContent() {
       .ql-start h2 { color:var(--primary); }
       .ql-start p { margin-top:8px; line-height:1.6; }
       .ql-question { width:100%; padding:16px 18px; margin:12px 0; border:0; }
-      .ql-question legend { font-weight:700; padding:0 4px; line-height:1.55; }
+      .ql-question legend { float:left; width:100%; font-weight:700; padding:0; margin-bottom:8px; line-height:1.55; }
+      .ql-question legend + * { clear:both; }
       .ql-option { display:flex; gap:10px; align-items:flex-start; padding:9px 4px; cursor:pointer; }
       .ql-option input { margin-top:5px; }
       .ql-result { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:18px; color:var(--primary); font-size:1.15rem; }

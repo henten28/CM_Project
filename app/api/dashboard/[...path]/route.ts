@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { forward } from "@/lib/backend";
 
 // only these backend dashboard paths are reachable from the browser
-const GET_PATHS = [/^sessions$/, /^tasks$/, /^evaluation$/];
+const GET_PATHS = [/^sessions$/, /^tasks$/, /^evaluation$/, /^visits$/];
 const POST_PATHS = [/^tasks\/[\w-]+\/close$/];
 
 type Ctx = { params: Promise<{ path: string[] }> };
@@ -12,7 +12,7 @@ async function resolve(ctx: Ctx, allowed: RegExp[]): Promise<string | null> {
   return allowed.some((re) => re.test(path)) ? path : null;
 }
 
-// GET /api/dashboard/sessions | tasks?status= | evaluation
+// GET /api/dashboard/sessions | tasks?status= | evaluation | visits
 export async function GET(request: NextRequest, ctx: Ctx) {
   const path = await resolve(ctx, GET_PATHS);
   if (!path) return Response.json({ detail: "not found" }, { status: 404 });

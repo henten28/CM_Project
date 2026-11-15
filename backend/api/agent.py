@@ -2,13 +2,14 @@
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+import auth
 import knowledge
 from agent_loop import AgentError, get_session, list_sessions, mutate_session, start_session
 
-router = APIRouter(prefix="/agent", tags=["agent"])
+router = APIRouter(prefix="/agent", tags=["agent"], dependencies=[Depends(auth.require_asha)])
 
 
 class StartRequest(BaseModel):

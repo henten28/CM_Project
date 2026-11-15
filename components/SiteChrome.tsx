@@ -1,26 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getContentLibrary, pick, type ContentLibrary } from "@/lib/api-client";
 import { useLang, useTextSize, tr, type Lang } from "@/lib/prefs";
+import { useUser, logout, type User } from "@/lib/auth-client";
 
-const NAV: { href: string; label: [string, string, string] }[] = [
+type NavItem = { href: string; label: [string, string, string] };
+
+// each role sees only its own screens; household learners (signed out) see lessons and published quizzes
+const NAV_PUBLIC: NavItem[] = [
   { href: "/", label: ["ಮುಖಪುಟ", "Home", "होम"] },
   { href: "/learn", label: ["ಕಲಿಕೆ", "Learn", "सीखें"] },
+  { href: "/quiz", label: ["ರಸಪ್ರಶ್ನೆ", "Take a quiz", "प्रश्नोत्तरी"] },
+];
+const NAV_ASHA: NavItem[] = [
+  { href: "/", label: ["ಮುಖಪುಟ", "Home", "होम"] },
   { href: "/visits", label: ["ಮನೆ ಭೇಟಿ", "Home Visits", "घर दौरे"] },
-  { href: "/dashboard", label: ["ಡ್ಯಾಶ್‌ಬೋರ್ಡ್", "Dashboard", "डैशबोर्ड"] },
+  { href: "/quiz-builder", label: ["ರಸಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ", "Prepare Quiz", "प्रश्नोत्तरी बनाएं"] },
+  { href: "/learn", label: ["ಕಲಿಕೆ", "Learn", "सीखें"] },
   { href: "/profile", label: ["ಪ್ರೊಫೈಲ್", "Profile", "प्रोफ़ाइल"] },
+];
+const NAV_SUPERVISOR: NavItem[] = [
+  { href: "/dashboard", label: ["ಡ್ಯಾಶ್‌ಬೋರ್ಡ್", "Dashboard", "डैशबोर्ड"] },
+  { href: "/learn", label: ["ಕಲಿಕೆ", "Learn", "सीखें"] },
+  { href: "/quiz", label: ["ಪ್ರಕಟಿತ ರಸಪ್ರಶ್ನೆ", "Published quizzes", "प्रकाशित प्रश्नोत्तरी"] },
   { href: "/settings", label: ["ಸೆಟ್ಟಿಂಗ್ಸ್", "Settings", "सेटिंग्स"] },
 ];
+
+function navFor(user: User | null | undefined): NavItem[] {
+  if (user?.role === "asha") return NAV_ASHA;
+  if (user?.role === "supervisor") return NAV_SUPERVISOR;
+  return NAV_PUBLIC;
+}
 
 // white utility bar + green navigation bar, as on government health portals
 export function SiteHeader() {
   const [lang, setLang] = useLang();
   const [size, setSize] = useTextSize();
   const path = usePathname();
+  const router = useRouter();
+  const user = useUser();
+  const nav = navFor(user);
   const t = (kn: string, en: string, hi: string) => tr(lang, kn, en, hi);
+
+  async function signOut() {
+    await logout();
+    router.push("/");
+    router.refresh();
+  }
 
   return (
     <header className="site-header">
@@ -49,14 +78,21 @@ export function SiteHeader() {
                 </button>
               ))}
             </div>
-            <Link href="/#start" className="pill-btn hide-sm">{t("ASHA ಕಾರ್ಯಕರ್ತೆ", "ASHA Worker", "ASHA कार्यकर्ता")}</Link>
-            <Link href="/dashboard" className="pill-btn hide-sm">{t("ಮೇಲ್ವಿಚಾರಕ", "Supervisor", "पर्यवेक्षक")}</Link>
+            {user === null && (
+              <Link id="sign-in-link" href="/login" className="pill-btn">{t("ಸೈನ್ ಇನ್", "Sign in", "साइन इन")}</Link>
+            )}
+            {user && (
+              <span className="user-chip" title={user.username}>
+                <span className="hide-sm">{user.role === "asha" ? "👩‍⚕️" : "🧑‍💼"} {user.name}</span>
+                <button id="sign-out-btn" className="pill-btn" onClick={signOut}>{t("ಸೈನ್ ಔಟ್", "Sign out", "साइन आउट")}</button>
+              </span>
+            )}
           </div>
         </div>
       </div>
       <nav className="navbar" aria-label="Main">
         <div className="navbar-inner">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
             return (
               <Link key={n.href} href={n.href} className={`nav-link ${active ? "active" : ""} ${lang === "kn" ? "kn" : ""}`} aria-current={active ? "page" : undefined}>
@@ -93,6 +129,7 @@ export function KeyMessageTicker() {
 
 export function SiteFooter() {
   const [lang] = useLang();
+  const user = useUser();
   const t = (kn: string, en: string, hi: string) => tr(lang, kn, en, hi);
   const fk = lang === "kn" ? "kn" : "";
   return (
@@ -107,7 +144,7 @@ export function SiteFooter() {
         </div>
         <div>
           <h4 className={fk}>{t("ತ್ವರಿತ ಲಿಂಕ್‌ಗಳು", "Quick links", "त्वरित लिंक")}</h4>
-          {NAV.map((n) => <Link key={n.href} href={n.href} className={fk}>{t(...n.label)}</Link>)}
+          {navFor(user).map((n) => <Link key={n.href} href={n.href} className={fk}>{t(...n.label)}</Link>)}
         </div>
         <div>
           <h4 className={fk}>{t("ವಿಷಯ ಮೂಲಗಳು", "Content sources", "सामग्री स्रोत")}</h4>

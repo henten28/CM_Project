@@ -3,8 +3,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useLang, type Lang } from "@/lib/prefs";
 import { SiteHeader, SiteFooter, PageBanner } from "@/components/SiteChrome";
-import { getDashboardSessions, getReferralTasks, closeReferralTask, getEvaluation,
-  type DashboardSession, type ReferralTask, type EvaluationReport, type Metric } from "@/lib/api-client";
+import { getDashboardSessions, getReferralTasks, closeReferralTask, getEvaluation, getAllVisits, getSession,
+  type DashboardSession, type ReferralTask, type EvaluationReport, type Metric, type Visit } from "@/lib/api-client";
+import { KA_DISTRICTS } from "@/lib/profile-store";
 
 
 // sessions, referral tasks and evaluation results all come from the backend (no demo data)
@@ -50,34 +51,20 @@ function BarChart({ data, label }: { data: {label:string;value:number;color:stri
   );
 }
 
-// ── Karnataka District Coverage Grid ─────────────────────────────────────────
-const DISTRICTS = [
-  "Bagalkot","Ballari","Belagavi","Bengaluru R.","Bengaluru U.",
-  "Bidar","Chamarajanagar","Chikkaballapur","Chikkamagaluru","Chitradurga",
-  "Dakshina K.","Davanagere","Dharwad","Gadag","Hassan",
-  "Haveri","Kalaburagi","Kodagu","Kolar","Koppal",
-  "Mandya","Mysuru","Raichur","Ramanagara","Shivamogga",
-  "Tumakuru","Udupi","Uttara K.","Vijayapura","Yadgir",
-];
-const COVERAGE_KEY = "amr_district_coverage";
-
-function useCoverage() {
-  const [coverage, setCoverage] = useState<Record<string,string>>({});
-  useEffect(()=>{
-    try{ const raw=localStorage.getItem(COVERAGE_KEY); if(raw) setCoverage(JSON.parse(raw)); }catch{}
-  },[]);
-  function toggle(d:string){
-    const states = ["","partial","covered"];
-    const idx = states.indexOf(coverage[d]??"");
-    const next = states[(idx+1)%states.length];
-    const updated = {...coverage,[d]:next};
-    setCoverage(updated);
-    localStorage.setItem(COVERAGE_KEY,JSON.stringify(updated));
+// ── Karnataka district coverage, computed from logged household visits ──────
+function coverageFrom(visits: Visit[]): Record<string, { visits: number; completed: number }> {
+  const out: Record<string, { visits: number; completed: number }> = {};
+  for (const v of visits) {
+    const d = (out[v.district] ??= { visits: 0, completed: 0 });
+    d.visits += 1;
+    if (v.outcome === "completed") d.completed += 1;
   }
-  return{coverage,toggle};
+  return out;
 }
 
-type DashTab = "overview"|"chart"|"map"|"safety"|"history";
+type LogEntry = { at: string; source: string; target: string; action: string; data: Record<string, unknown> };
+
+type DashTab = "overview"|"chart"|"map"|"safety"|"history"|"visits";
 
 function DashboardContent() {
   const [lang] = useLang();  // shared, saved preference; changed from the site header
@@ -87,12 +74,22 @@ function DashboardContent() {
   const [taskFilter, setTaskFilter] = useState<"open"|"all">("open");
   const [evaluation, setEvaluation] = useState<EvaluationReport|null>(null);
   const [loadError, setLoadError] = useState<string|null>(null);
-  const {coverage,toggle} = useCoverage();
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [openLog, setOpenLog] = useState<string|null>(null);
+  const [logs, setLogs] = useState<Record<string, LogEntry[]>>({});
+  const coverage = coverageFrom(visits);
+
+  function toggleLog(id: string) {
+    if (openLog === id) { setOpenLog(null); return; }
+    setOpenLog(id);
+    if (!logs[id]) getSession(id).then((rec) => setLogs((x) => ({ ...x, [id]: ((rec as unknown as { log: LogEntry[] }).log ?? []) })))
+      .catch(() => setLogs((x) => ({ ...x, [id]: [] })));
+  }
 
   // state is only set inside promise callbacks (react-hooks lint rule)
   function refresh(filter: "open"|"all" = taskFilter){
-    return Promise.all([getDashboardSessions(),getReferralTasks(filter),getEvaluation()])
-      .then(([s,t,e])=>{ setSessions(s); setTasks(t); setEvaluation(e); setLoadError(null); })
+    return Promise.all([getDashboardSessions(),getReferralTasks(filter),getEvaluation(),getAllVisits()])
+      .then(([s,t,e,v])=>{ setSessions(s); setTasks(t); setEvaluation(e); setVisits(v); setLoadError(null); })
       .catch((e)=>setLoadError(e instanceof Error?e.message:"backend unreachable"));
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,14 +108,15 @@ function DashboardContent() {
   const planValidCount = sessions.filter(s=>s.lessonPlanValid).length;
   const avgScore = completed ? Math.round(sessions.filter(s=>s.sessionCompleted).reduce((sum,s)=>sum+s.quizScore,0)/completed) : 0;
   const openTaskCount = sessions.reduce((n,s)=>n+s.openTasks,0);
+  const ashaCount = new Set(visits.map(v=>v.ashaId)).size;
 
   function pct(n:number,d:number){ return d===0?0:Math.round((n/d)*100); }
 
   // CSV export
   function exportCSV(){
-    const headers = ["ID","Topic","Language","Date","Duration","Score","Correct","Total Q","Gaps","Safety","PlanValid","Completed","OpenTasks"];
+    const headers = ["ID","ASHA","Topic","Language","Date","Duration","Score","Correct","Total Q","Gaps","Safety","PlanValid","Completed","OpenTasks"];
     const rows = sessions.map(s=>[
-      s.id,s.topic,s.lang,s.date,s.durationMin,s.quizScore,s.correctQ,s.totalQ,
+      s.id,`"${s.ashaName??""}"`,s.topic,s.lang,s.date,s.durationMin,s.quizScore,s.correctQ,s.totalQ,
       `"${s.gaps.join(";")}"`,s.safetyRouted,s.lessonPlanValid??"",s.sessionCompleted,s.openTasks
     ]);
     const csv = [headers,...rows].map(r=>r.join(",")).join("\n");
@@ -145,7 +143,8 @@ function DashboardContent() {
     {id:"chart",icon:"📈",label:{kn:"ಚಾರ್ಟ್",en:"Charts",hi:"चार्ट"}},
     {id:"map",icon:"🗺️",label:{kn:"ನಕ್ಷೆ",en:"Coverage Map",hi:"कवरेज मैप"}},
     {id:"safety",icon:"🛡️",label:{kn:"ಸಂರಕ್ಷಣೆ",en:"Safety Log",hi:"सुरक्षा लॉग"}},
-    {id:"history",icon:"🗂️",label:{kn:"ಇತಿಹಾಸ",en:"History",hi:"इतिहास"}},
+    {id:"history",icon:"🗂️",label:{kn:"ಅಧಿವೇಶನಗಳು",en:"Sessions",hi:"सत्र"}},
+    {id:"visits",icon:"🏘️",label:{kn:"ಭೇಟಿಗಳು",en:"Visits",hi:"दौरे"}},
   ];
 
   return (
@@ -184,6 +183,7 @@ function DashboardContent() {
                 {label:{kn:"ಸುರಕ್ಷಾ ಮಾರ್ಗ",en:"Safety Routing",hi:"सुरक्षा मार्ग"},value:`${pct(safetyRoutedCount,total)}%`,sub:{kn:`${openTaskCount} ತೆರೆದ ರೆಫರಲ್`,en:`${openTaskCount} open referral(s)`,hi:`${openTaskCount} खुले रेफरल`},icon:"🛡️",color:"var(--sky-600)"},
                 {label:{kn:"ಯೋಜನೆ ಮಾನ್ಯ",en:"Plan Valid",hi:"योजना मान्य"},value:`${pct(planValidCount,planned)}%`,sub:{kn:`${planValidCount}/${planned}`,en:`${planValidCount}/${planned}`,hi:`${planValidCount}/${planned}`},icon:"📋",color:"var(--amber-700)"},
                 {label:{kn:"ಸರಾಸರಿ ಅಂಕ",en:"Avg Score",hi:"औसत स्कोर"},value:`${avgScore}%`,sub:{kn:"ಪೂರ್ಣ ಅಧಿವೇಶನ",en:"completed",hi:"पूर्ण"},icon:"🧠",color:"var(--green-700)"},
+                {label:{kn:"ಮನೆ ಭೇಟಿ",en:"Household Visits",hi:"घर दौरे"},value:`${visits.length}`,sub:{kn:`${ashaCount} ASHA`,en:`by ${ashaCount} ASHA(s)`,hi:`${ashaCount} ASHA`},icon:"🏘️",color:"var(--sky-600)"},
               ].map(k=>(
                 <div key={k.label.en} className="card" style={{textAlign:"center",padding:"20px 14px"}}>
                   <div style={{fontSize:"1.8rem",marginBottom:8}}>{k.icon}</div>
@@ -213,8 +213,9 @@ function DashboardContent() {
                     ["Medical questions routed correctly",evaluation.metrics.safetyRoutingAccuracy],
                     ["Safe questions wrongly blocked",evaluation.metrics.safetyFalsePositives],
                     ["AI lesson plans passing validation",evaluation.metrics.aiPlansPassingValidation],
+                    ["Planner calls lost to provider errors",evaluation.metrics.providerErrors],
                     ["Full sessions completed",evaluation.metrics.fullSessionsCompleted],
-                  ] as [string,Metric][]).map(([label,m])=>(
+                  ] as [string,Metric|undefined][]).filter((r): r is [string,Metric]=>Boolean(r[1])).map(([label,m])=>(
                     <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--border)",fontSize:"0.85rem"}}>
                       <span className="text-muted">{label}</span>
                       <strong>{m.percent===null?"not measured (mock mode)":`${m.percent}% (${m.numerator}/${m.denominator})`}</strong>
@@ -285,48 +286,28 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Tab: Coverage Map */}
+        {/* Tab: Coverage Map (from logged household visits) */}
         {tab==="map"&&(
           <div>
             <h2 className={`text-lg font-bold text-primary mb-2 ${fk()}`}>{L("🗺️ ಜಿಲ್ಲೆ ವ್ಯಾಪ್ತಿ","🗺️ District Coverage","🗺️ जिला कवरेज")}</h2>
-            <p className={`text-sm text-muted mb-4 ${fk()}`}>{L("ಜಿಲ್ಲೆ ಕ್ಲಿಕ್ ಮಾಡಿ: ಖಾಲಿ → ಭಾಗ → ಪೂರ್ಣ","Click district to cycle: uncovered → partial → covered","जिले पर क्लिक करें: अनकवर → आंशिक → पूर्ण")}</p>
-
-            {/* Legend */}
+            <p className={`text-sm text-muted mb-4 ${fk()}`}>{L("ASHA ಕಾರ್ಯಕರ್ತೆಯರು ದಾಖಲಿಸಿದ ಮನೆ ಭೇಟಿಗಳಿಂದ ಲೆಕ್ಕ ಹಾಕಲಾಗಿದೆ.","Computed from the household visits ASHA workers have logged.","ASHA द्वारा दर्ज घर दौरों से गणना।")}</p>
             <div className="flex gap-3 mb-4" style={{flexWrap:"wrap"}}>
-              {[["","⬜","Uncovered","ಆವರಿಸಿಲ್ಲ","कवर नहीं"],["partial","🟨","Partial","ಭಾಗ","आंशिक"],["covered","🟩","Covered","ಪೂರ್ಣ","पूर्ण"]].map(([val,icon,en,kn,hi])=>(
-                <div key={val} className="flex items-center gap-1" style={{fontSize:"0.78rem",fontWeight:600,color:"var(--text-muted)"}}>
-                  <span>{icon}</span><span>{lang==="kn"?kn:lang==="hi"?hi:en}</span>
-                </div>
+              {[["⬜",L("ಭೇಟಿ ಇಲ್ಲ","No visits","कोई दौरा नहीं")],["🟨",L("ಭೇಟಿ, ಪೂರ್ಣ ಅಧಿವೇಶನ ಇಲ್ಲ","Visited, none completed","दौरा, पूर्ण नहीं")],["🟩",L("ಪೂರ್ಣ ಭೇಟಿ","Completed visit(s)","पूर्ण दौरा")]].map(([icon,label])=>(
+                <div key={label} className="flex items-center gap-1" style={{fontSize:"0.78rem",fontWeight:600,color:"var(--text-muted)"}}><span>{icon}</span><span>{label}</span></div>
               ))}
-              <div className="ml-auto text-xs text-muted">
-                {L("ಪೂರ್ಣ","Covered","पूर्ण")}: {Object.values(coverage).filter(v=>v==="covered").length}/30
-              </div>
+              <div className="ml-auto text-xs text-muted">{L("ಆವರಿಸಿದ ಜಿಲ್ಲೆ","Districts reached","कवर जिले")}: {Object.keys(coverage).length}/{KA_DISTRICTS.length}</div>
             </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
-              {DISTRICTS.map(d=>{
-                const state = coverage[d]??"";
-                const bg = state==="covered"?"var(--green-600)":state==="partial"?"var(--amber-500)":"var(--border)";
-                const textColor = state?"white":"var(--text-muted)";
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+              {KA_DISTRICTS.map(d=>{
+                const c = coverage[d];
+                const bg = c?.completed?"var(--green-600)":c?"var(--amber-500)":"var(--border)";
                 return(
-                  <button key={d} onClick={()=>toggle(d)}
-                    style={{background:bg,color:textColor,border:"2px solid transparent",borderRadius:8,padding:"8px 4px",fontSize:"0.62rem",fontWeight:600,cursor:"pointer",transition:"var(--transition)",lineHeight:1.2,textAlign:"center"}}>
-                    {d}
-                  </button>
+                  <div key={d} title={c?`${c.visits} visit(s), ${c.completed} completed`:"no visits"}
+                    style={{background:bg,color:c?"white":"var(--text-muted)",borderRadius:8,padding:"8px 6px",fontSize:"0.7rem",fontWeight:600,lineHeight:1.2,textAlign:"center"}}>
+                    {d}{c&&<div style={{fontSize:"0.65rem",opacity:0.9}}>{c.visits} 🏘️</div>}
+                  </div>
                 );
               })}
-            </div>
-
-            {/* Coverage stats */}
-            <div className="stat-grid mt-4">
-              <div className="stat-card">
-                <div className="stat-val" style={{color:"var(--green-700)"}}>{Object.values(coverage).filter(v=>v==="covered").length}</div>
-                <div className={`stat-label ${fk()}`}>{L("ಪೂರ್ಣ ಆವರಿಸಿದ","Fully Covered","पूरी तरह कवर")}</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-val" style={{color:"var(--amber-700)"}}>{Object.values(coverage).filter(v=>v==="partial").length}</div>
-                <div className={`stat-label ${fk()}`}>{L("ಭಾಗ ಆವರಿಸಿದ","Partially Covered","आंशिक रूप से")}</div>
-              </div>
             </div>
           </div>
         )}
@@ -400,9 +381,29 @@ function DashboardContent() {
                     {TOPIC_LABELS[s.topic]?.[lang]??s.topic}
                     {s.safetyRouted&&<span className="badge badge-red" style={{marginLeft:8,fontSize:"0.68rem"}}>🛡️ {L("ಸುರಕ್ಷಾ","Safety","सुरक्षा")}</span>}
                   </div>
-                  <div className="shi-meta">{s.date} · {s.durationMin} min · {s.lang.toUpperCase()} · {L("ಅಂಕ","Score","स्कोर")}: {s.quizScore}%
+                  <div className="shi-meta">{s.ashaName?`👩‍⚕️ ${s.ashaName} · `:""}{s.date} · {s.durationMin} min · {s.lang.toUpperCase()} · {L("ಅಂಕ","Score","स्कोर")}: {s.quizScore}%
                     {s.gaps.length>0&&<span style={{marginLeft:6,color:"var(--amber-700)"}}>⚠️ {s.gaps.length} gap(s)</span>}
                   </div>
+                  <div className="flex gap-1 mt-1" style={{flexWrap:"wrap",alignItems:"center"}}>
+                    {Object.entries(s.agentSources??{}).map(([agent,src])=>(
+                      <span key={agent} className={`agent-tag ${src==="llm"?"llm":""}`} title={src==="llm"?"used the LLM":"rule-based"}>{agent}: {src==="llm"?"AI":src}</span>
+                    ))}
+                    <button className="btn btn-ghost btn-sm" style={{padding:"2px 8px",fontSize:"0.72rem"}} onClick={()=>toggleLog(s.id)}>
+                      {openLog===s.id?L("ಲಾಗ್ ಮುಚ್ಚಿ","Hide agent log","लॉग छिपाएं"):L("ಏಜೆಂಟ್ ಲಾಗ್","View agent log","एजेंट लॉग")}
+                    </button>
+                  </div>
+                  {openLog===s.id&&(
+                    <ol className="agent-log">
+                      {(logs[s.id]??[]).map((h,i)=>(
+                        <li key={i}><span className="text-muted">{new Date(h.at).toLocaleTimeString("en-IN")}</span> <b>{h.source}</b> → <b>{h.target}</b> · {h.action}
+                          {typeof h.data.agentSource==="string"&&<span className={`agent-tag ${h.data.agentSource==="llm"?"llm":""}`} style={{marginLeft:6}}>{h.data.agentSource==="llm"?"AI":"rules"}</span>}
+                          {typeof h.data.planSource==="string"&&<span className={`agent-tag ${h.data.planSource==="llm"?"llm":""}`} style={{marginLeft:6}}>{h.data.planSource==="llm"?"AI":"rules"}</span>}
+                          {h.action==="override"&&<span className="agent-tag" style={{marginLeft:6,background:"var(--red-100)",color:"var(--red-600)"}}>{String(h.data.category)}</span>}
+                        </li>
+                      ))}
+                      {!logs[s.id]&&<li className="text-muted">Loading…</li>}
+                    </ol>
+                  )}
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
                   <div style={{fontSize:"0.9rem",fontWeight:700,color:s.quizScore>=80?"var(--green-700)":s.quizScore>=60?"var(--amber-700)":"var(--red-600)"}}>{s.quizScore}%</div>
@@ -410,6 +411,26 @@ function DashboardContent() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {/* Tab: Visits (all ASHA workers) */}
+        {tab==="visits"&&(
+          <div>
+            <h2 className={`text-lg font-bold text-primary mb-4 ${fk()}`}>{L("🏘️ ಎಲ್ಲಾ ಮನೆ ಭೇಟಿಗಳು","🏘️ All household visits","🏘️ सभी घर दौरे")}</h2>
+            {visits.length===0?(
+              <div className="card text-center" style={{padding:"32px 20px"}}><p className={`text-muted ${fk()}`}>{L("ಇನ್ನೂ ಯಾವ ಭೇಟಿಯೂ ದಾಖಲಾಗಿಲ್ಲ","No visits logged yet","अभी कोई दौरा दर्ज नहीं")}</p></div>
+            ):(
+              <div style={{overflowX:"auto"}}>
+                <table className="dash-table">
+                  <thead><tr><th>{L("ದಿನಾಂಕ","Date","तारीख")}</th><th>ASHA</th><th>{L("ಕುಟುಂಬ","Household","परिवार")}</th><th>{L("ಗ್ರಾಮ","Village","गाँव")}</th><th>{L("ಜಿಲ್ಲೆ","District","जिला")}</th><th>{L("ವಿಷಯ","Topic","विषय")}</th><th>{L("ಅಂಕ","Score","स्कोर")}</th><th>{L("ಫಲಿತಾಂಶ","Outcome","परिणाम")}</th></tr></thead>
+                  <tbody>{visits.map(v=>(
+                    <tr key={v.id}><td>{v.date}</td><td>{v.ashaName??v.ashaId}</td><td>{v.household}</td><td>{v.village}</td><td>{v.district}</td>
+                      <td>{TOPIC_LABELS[v.topic]?.[lang]??v.topic}</td><td>{v.quizScore===null?"—":`${v.quizScore}%`}</td>
+                      <td><span className={`badge ${v.outcome==="completed"?"badge-green":v.outcome==="referred"?"badge-sky":"badge-amber"}`}>{v.outcome}</span></td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </main>

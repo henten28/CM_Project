@@ -39,5 +39,9 @@ BEDROCK_TIMEOUT_S = int(os.getenv("BEDROCK_TIMEOUT_S", "60"))
 # SQLAlchemy URL; a local SQLite file by default, a postgresql:// URL works too
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{Path(__file__).resolve().parent / 'amr_jagruti.db'}")
 
+# sign-in: demo ASHA and supervisor accounts are created on first use unless this is false
+SEED_DEMO_USERS = os.getenv("SEED_DEMO_USERS", "true").strip().lower() in ("1", "true", "yes")
+AUTH_TOKEN_HOURS = int(os.getenv("AUTH_TOKEN_HOURS", "12"))
+
 # the only browser origin allowed to call this API
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")

@@ -55,6 +55,8 @@ export interface TutorResult {
   feedback: AnswerFeedback[];
   nextActivity: { level: Level; kind: "recap" | "guided_practice" | "case_study"; contentIds: string[]; questionIds: string[] };
   nextQuestions: QuizItem[];
+  agentSource?: "llm" | "rules";
+  ashaTip?: Bilingual | null;  // LLM teaching tip for the ASHA, screened by the safety controller
 }
 
 export interface SafetyResult {
@@ -87,6 +89,9 @@ export interface SessionSummary {
   sourcesCited: { id: string; name: string }[];
   contentVersion: string;
   note: Bilingual;
+  agentSource?: "llm" | "rules";
+  narrative?: Bilingual | null;  // LLM recap, safety-screened
+  nextVisit?: Bilingual | null;  // LLM next-visit suggestion, safety-screened
 }
 
 export interface SessionRecord {
@@ -102,6 +107,8 @@ export interface SessionRecord {
   startSafety: SafetyResult | null;
   escalations: EscalationTask[];
   summary: SessionSummary | null;
+  ashaId?: string | null;
+  ashaName?: string | null;
 }
 
 export interface Health {
@@ -119,14 +126,20 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-async function call<T>(path: string, body?: unknown): Promise<T> {
+async function call<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const res = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && typeof window !== "undefined") {
+    // signed out or the sign-in expired: go to the sign-in page and come back here afterwards
+    // a full navigation on purpose: this helper runs outside React, and the proxy re-checks the role on arrival
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  }
   if (!res.ok) {
     // FastAPI puts errors in `detail` (a string, or a list of validation errors)
     const d = (data as { detail?: unknown }).detail;
@@ -177,14 +190,44 @@ export function resumeSession(sessionId: string) {
     "/api/session/step", { sessionId, action: "resume" });
 }
 
+export interface MySession {
+  id: string; topic: string; lang: Lang; state: SessionState; createdAt: string; durationMin: number;
+  answered: number; quizScore: number | null;
+}
+
+// the signed-in ASHA's recent sessions (for resuming and for linking a household visit)
+export function getMySessions() {
+  return call<MySession[]>("/api/session/mine");
+}
+
+// ── household visits ─────────────────────────────────────────────────────────
+
+export interface Visit {
+  id: string; household: string; village: string; district: string; topic: string; lang: Lang; date: string;
+  durationMin: number; outcome: "completed" | "partial" | "referred"; notes: string;
+  quizScore: number | null; sessionId: string | null; createdAt: string; ashaId: string; ashaName?: string;
+}
+
+export interface VisitInput {
+  household: string; village: string; district: string; topic?: string; lang?: Lang; durationMin?: number;
+  outcome: Visit["outcome"]; notes?: string; sessionId?: string;
+}
+
+export function getMyVisits() { return call<Visit[]>("/api/visits"); }
+export function addVisit(input: VisitInput) { return call<Visit>("/api/visits", input); }
+export function deleteVisit(id: string) { return call<{ ok: boolean }>(`/api/visits/${encodeURIComponent(id)}`, undefined, "DELETE"); }
+
 // ── supervisor dashboard ─────────────────────────────────────────────────────
 
 export interface DashboardSession {
   id: string; topic: string; lang: Lang; state: SessionState; date: string; createdAt: string; durationMin: number;
   quizScore: number; totalQ: number; correctQ: number; gaps: string[];
   safetyRouted: boolean; openTasks: number; lessonPlanValid: boolean | null; planSource: "llm" | "rules" | null;
-  sessionCompleted: boolean;
+  sessionCompleted: boolean; ashaId: string | null; ashaName: string | null;
+  agentSources: Record<string, string>;
 }
+
+export function getAllVisits() { return call<Visit[]>("/api/dashboard/visits"); }
 
 export interface ReferralTask extends EscalationTask { sessionId: string; topic: string; lang: Lang; }
 
@@ -193,7 +236,7 @@ export interface Metric { numerator: number; denominator: number; percent: numbe
 export interface EvaluationReport {
   generatedAt: string; mode: "mock" | "openai" | "bedrock"; model: string | null; contentVersion: string;
   metrics: { testPassRate: Metric; safetyRoutingAccuracy: Metric; safetyFalsePositives: Metric;
-             aiPlansPassingValidation: Metric; fullSessionsCompleted: Metric };
+             aiPlansPassingValidation: Metric; fullSessionsCompleted: Metric; providerErrors?: Metric };
   scenarios: { id: string; type: string; title: string; passed: boolean; detail: string }[];
 }
 

@@ -48,6 +48,20 @@ function TracePanel({ trace, callsUsed, maxCalls }: { trace: AgentTrace[]; calls
   </details>;
 }
 
+// plain-language version of setup errors; the raw message stays in the technical details
+function friendlyError(message: string): string {
+  if (/OPENAI_API_KEY|OPENAI_MOCK|LLM_PROVIDER/.test(message)) {
+    return "AI quiz generation is not set up on this server yet. Ask the project admin to add an OpenAI key to backend/.env (OPENAI_API_KEY, with OPENAI_MOCK=false) and restart the backend.";
+  }
+  if (/OpenAI request failed|budget|limit/i.test(message)) {
+    return "The AI service did not respond this time. Please try again in a moment.";
+  }
+  return message;
+}
+
+const TOPIC_PRESETS = ["What is antimicrobial resistance?", "Why antibiotics do not work on viruses", "Completing the full course",
+  "Not sharing or reusing leftover antibiotics", "Handwashing and infection prevention"];
+
 interface EditorState {
   id: string;
   question: string;
@@ -166,7 +180,7 @@ function BuilderContent() {
   function regenerateOne(question: DraftQuestion) {
     if (!draft) return;
     void mutate({ action: "regenerate_question", expectedRevision: draft.revision, questionId: question.id,
-      feedback: regenNotes[question.id]?.trim() || undefined }, `Question regenerated. Review the full batch; draft revision is now ${draft.revision + 1}.`);
+      feedback: regenNotes[question.id]?.trim() || undefined }, "Question regenerated. Please review it.");
   }
 
   function regenerateAll() {
@@ -176,7 +190,7 @@ function BuilderContent() {
 
   function publishAll() {
     if (!draft) return;
-    void mutate({ action: "publish", expectedRevision: draft.revision }, "All questions approved and published as an immutable version.");
+    void mutate({ action: "publish", expectedRevision: draft.revision }, "Published. Copy the link below and share it with households.");
   }
 
   async function copyShareLink() {
@@ -187,44 +201,44 @@ function BuilderContent() {
 
   return <div className="portal portal-page">
     <SiteHeader />
-    <PageBanner img="/img/step1.svg" title="Batch quiz review"
-      sub="Prepare a reusable quiz once. ASHA approves the full question batch before it is published." />
+    <PageBanner img="/img/step1.svg" title="Prepare a quiz for households"
+      sub="The quiz agent drafts questions from the source documents. You review every question, then publish and share the link." />
     <main className="page-body qb-page" style={{ maxWidth: 1100 }}>
-      <div className="qb-top-links"><Link className="pill-btn" href="/quiz">Browse published quizzes</Link><span className="text-xs text-muted">Local reviewer surface · no separate sign-in</span></div>
+      <div className="qb-top-links"><Link className="pill-btn" href="/quiz">Published quizzes</Link>{draftId && <Link className="pill-btn" href="/quiz-builder">+ New quiz</Link>}</div>
 
       {!draftId && (!draft || loadedDraftId !== draftId) && <section className="card-elevated qb-form">
-        <h2>Create quiz draft</h2>
-        <p className="text-sm text-muted mt-2">Generation starts only when you press the button. Default: five basic questions.</p>
+        <h2>New quiz</h2>
+        <p className="text-sm text-muted mt-2">Pick a topic and press Generate. Nothing is shown to households until you approve it.</p>
         <div className="qb-form-grid mt-3">
-          <label className="field">Topic<input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="AMR awareness" maxLength={300} /></label>
-          <label className="field">Language<select value={draftLang} onChange={(event) => setDraftLang(event.target.value as Lang)}><option value="en">English</option><option value="kn">Kannada</option><option value="hi">Hindi</option></select></label>
+          <label className="field">Topic<input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="AMR awareness" maxLength={300} list="qb-topic-presets" />
+            <datalist id="qb-topic-presets">{TOPIC_PRESETS.map((item) => <option key={item} value={item} />)}</datalist></label>
+          <label className="field">Language<select value={draftLang} onChange={(event) => setDraftLang(event.target.value as Lang)}><option value="en">English</option><option value="kn">Kannada</option><option value="hi">Hindi (experimental)</option></select></label>
           <label className="field">Difficulty<select value={difficulty} onChange={(event) => setDifficulty(event.target.value as QuizDifficulty)}><option value="basic">Basic</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
           <label className="field">Question count<select value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count}</option>)}</select></label>
         </div>
-        <button type="button" className="btn btn-primary mt-4" disabled={busy || !topic.trim()} onClick={() => void generate()}>{busy ? "Generating…" : "Generate quiz draft"}</button>
+        <button type="button" className="btn btn-primary mt-4" disabled={busy || !topic.trim()} onClick={() => void generate()}>{busy ? "Generating… (about 20 seconds)" : "Generate quiz"}</button>
       </section>}
 
       {loadingDraft && <p role="status" className="card mt-3">Loading saved draft…</p>}
-      {error && <div className="qb-error mt-3" role="alert">{error}</div>}
+      {error && <div className="qb-error mt-3" role="alert">{friendlyError(error)}</div>}
       {notice && <p className="qb-notice mt-3" role="status">{notice}</p>}
 
       {draft && loadedDraftId === draftId && !loadingDraft && <>
         <div className="qb-draft-heading card mt-4">
           <div><span className={`badge ${draft.state === "BLOCKED" ? "badge-red" : draft.state === "PUBLISHED" ? "badge-green" : "badge-amber"}`}>{draft.state.replaceAll("_", " ")}</span>
-            <h2>{draft.title}</h2><p>{draft.topic} · {draft.lang.toUpperCase()} · {draft.difficulty} · {draft.questionCount} questions · Revision {draft.revision}</p></div>
-          <span className="text-sm text-muted">Generation calls {draft.callsUsed}/{draft.maxCalls}</span>
+            <h2>{draft.title}</h2><p>{draft.topic} · {draft.lang.toUpperCase()} · {draft.difficulty} · {draft.questionCount} questions</p></div>
         </div>
-        {draft.usingDemo && <aside className="qb-note mt-3" role="note">Built-in demo evidence is labelled unverified; citations identify retrieved excerpts and do not establish clinical verification.</aside>}
+        {draft.usingDemo && <aside className="qb-note mt-3" role="note">These questions use the built-in demo excerpt. Check each answer against its source before publishing.</aside>}
         {draft.publishedVersion !== null && <section className="qb-published card mt-3">
-          <strong>Published version {draft.publishedVersion} is immutable.</strong> Any saved edits below remain a draft until the full batch is approved and published again.
+          <strong>Published (version {draft.publishedVersion}).</strong> Share this link with households. If you edit questions below, households keep seeing this version until you publish again.
           <div className="qb-share mt-2"><label className="field">Learner link<input readOnly value={shareUrl} aria-label="Published learner link" /></label><button className="btn btn-outline" type="button" onClick={() => void copyShareLink()}>Copy link</button></div>
           <Link href={`/quiz?id=${encodeURIComponent(draft.id)}&version=${draft.publishedVersion}`} target="_blank" className="inline-link">Open learner quiz</Link>
         </section>}
-        {draft.error && <div className="qb-error mt-3" role="alert">{draft.error}</div>}
+        {draft.error && <div className="qb-error mt-3" role="alert">{friendlyError(draft.error)}</div>}
 
         <section className="qb-review mt-4" aria-labelledby="qb-review-title">
-          <div className="qb-section-head"><div><h2 id="qb-review-title">Review all {draft.questions.length} questions together</h2><p className="text-sm text-muted">Check question wording, the proposed answer, explanation and retrieved evidence. Nothing is published until the batch approval.</p></div>
-            <button type="button" className="btn btn-primary" disabled={busy || Boolean(editor) || draft.state !== "AWAITING_REVIEW" || !draft.questions.length} onClick={publishAll}>{busy ? "Saving…" : draft.state === "PUBLISHED" ? `Published v${draft.publishedVersion} — edit to create a new version` : draft.state === "BLOCKED" ? "Draft blocked" : "Approve all and publish"}</button>
+          <div className="qb-section-head"><div><h2 id="qb-review-title">Review {draft.questions.length} questions</h2><p className="text-sm text-muted">Check each question, its answer and explanation against the quoted source. Edit or regenerate any that are wrong.</p></div>
+            <button type="button" className="btn btn-primary" disabled={busy || Boolean(editor) || draft.state !== "AWAITING_REVIEW" || !draft.questions.length} onClick={publishAll}>{busy ? "Saving…" : draft.state === "PUBLISHED" ? "Published ✓" : draft.state === "BLOCKED" ? "Cannot publish" : "Approve all and publish"}</button>
           </div>
           {draft.questions.map((question, index) => <article className="card-elevated qb-question" key={question.id}>
             <div className="qb-question-head"><span className="badge badge-amber">Question {index + 1}</span><span className="text-xs text-muted">{question.conceptTag}</span></div>
@@ -240,7 +254,7 @@ function BuilderContent() {
               <h3>{question.question}</h3>
               <ol className="qb-options">{question.options.map((option, optionIndex) => <li key={`${optionIndex}-${option}`}>{option}{optionIndex === question.correctIndex && <strong className="qb-answer-key"> · Proposed answer</strong>}</li>)}</ol>
               <p className="qb-explanation"><strong>Proposed explanation:</strong> {question.explanation}</p>
-              <CitationBlock citations={question.citations} />
+              <details className="qb-source-toggle"><summary>Source quote ({question.citations.length})</summary><CitationBlock citations={question.citations} /></details>
               <div className="qb-buttons mt-3"><button type="button" className="btn btn-outline" disabled={busy || Boolean(editor) || draft.state === "BLOCKED"} onClick={() => setEditor(editorFor(question))}>Edit question</button>
                 <button type="button" className="btn btn-outline" disabled={busy || Boolean(editor) || draft.state === "BLOCKED"} onClick={() => regenerateOne(question)}>Regenerate question</button></div>
               <label className="field qb-feedback">Regeneration guidance (optional)<input value={regenNotes[question.id] ?? ""} onChange={(event) => setRegenNotes({ ...regenNotes, [question.id]: event.target.value })} placeholder="What should improve in this question?" /></label>
@@ -253,12 +267,17 @@ function BuilderContent() {
           <label className="field mt-2">Batch guidance (optional)<textarea rows={2} value={batchNote} onChange={(event) => setBatchNote(event.target.value)} /></label>
           <button type="button" className="btn btn-outline mt-2" disabled={busy || Boolean(editor)} onClick={regenerateAll}>Regenerate all {draft.questionCount} questions</button>
         </section>}
-        <TracePanel trace={draft.trace ?? []} callsUsed={draft.callsUsed} maxCalls={draft.maxCalls} />
       </>}
 
       {!!drafts.length && <section className="card qb-saved mt-4"><h2>Saved drafts</h2><ul>{drafts.map((item) => <li key={item.id}><Link href={`/quiz-builder?draft=${encodeURIComponent(item.id)}`}>{item.title || item.topic}</Link> · {item.state.replaceAll("_", " ")} · revision {item.revision} · {item.questionCount} questions{item.publishedVersion ? ` · published v${item.publishedVersion}` : ""}</li>)}</ul></section>}
 
-      <section className="card qb-sources mt-4">
+      <details className="card qb-panel mt-4">
+        <summary>Technical details (for the project team)</summary>
+        {draft && loadedDraftId === draftId && <div className="mt-3">
+          <p className="text-sm text-muted">Draft revision {draft.revision} · model calls {draft.callsUsed}/{draft.maxCalls}{draft.error ? ` · last error: ${draft.error}` : ""}</p>
+          <TracePanel trace={draft.trace ?? []} callsUsed={draft.callsUsed} maxCalls={draft.maxCalls} />
+        </div>}
+      <section className="qb-sources mt-3">
         <h2>Knowledge source status</h2>
         {sources ? <><p className="text-sm text-muted">{sources.chunkCount} searchable chunks across {sources.sources.length} listed sources.</p>
           {sources.usingDemo && <p className="qb-note mt-2">The built-in library is unverified demo evidence. It does not establish clinical verification.</p>}
@@ -267,10 +286,11 @@ function BuilderContent() {
         </> : <p className="text-sm text-muted">Source status is unavailable.</p>}
         <p className="text-xs text-muted mt-2">Add reviewed PDF, TXT or Markdown files under <code>backend/knowledge/documents/</code> and update <code>backend/knowledge/sources.json</code>, then restart the backend. Sources eligible for retrieval still require ASHA review of every generated question.</p>
       </section>
+      </details>
     </main>
     <SiteFooter />
     <style jsx>{`
-      .qb-page { display:grid; gap:14px; }
+      .qb-page { display:grid; gap:14px; align-content:start; }
       .qb-top-links, .qb-draft-heading, .qb-section-head, .qb-question-head, .qb-share { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
       .qb-form, .qb-panel, .qb-saved, .qb-sources, .qb-published, .qb-batch-tools { padding:18px; }
       .qb-form h2, .qb-saved h2, .qb-sources h2 { color:var(--primary); font-size:1.1rem; }
@@ -306,7 +326,8 @@ function BuilderContent() {
       .qb-saved ul, .qb-sources ul { padding-left:20px; line-height:1.8; margin-top:8px; }
       .qb-traces { display:grid; gap:8px; margin-top:12px; }
       .qb-trace { border:1px solid var(--border); border-radius:8px; padding:10px; }
-      .qb-trace summary, .qb-panel summary { cursor:pointer; font-weight:700; }
+      .qb-trace summary, .qb-panel summary, .qb-source-toggle summary { cursor:pointer; font-weight:700; }
+      .qb-source-toggle { margin-top:12px; font-size:.85rem; color:var(--primary); }
       .qb-trace pre { max-height:400px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.75rem; margin-top:8px; }
       @media(max-width:640px) { .qb-share { align-items:stretch; } .qb-share .field { min-width:0; } }
     `}</style>

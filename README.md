@@ -6,6 +6,7 @@ AMR Jagruti is an education tool. It does not diagnose, prescribe, suggest doses
 
 ## Contents
 
+0. [Mid-term update: sign-in, roles and four LLM agents](#mid-term-update-sign-in-roles-and-four-llm-agents)
 1. [Quickstart](#quickstart)
 2. [How it works](#how-it-works)
 3. [Project structure](#project-structure)
@@ -22,6 +23,70 @@ AMR Jagruti is an education tool. It does not diagnose, prescribe, suggest doses
 14. [Adding content](#adding-content)
 15. [What has been built so far](#what-has-been-built-so-far)
 16. [Known limitations and next steps](#known-limitations-and-next-steps)
+
+## Mid-term update: sign-in, roles and four LLM agents
+
+This update responds to the testing round ("ASHA workers can reach the supervisor dashboard", "no separate learner login", "visits can be logged before signing in", "what is the visit quiz score?", "quiz question alignment is off") and closes the main gap with the proposal (only the planning agent used the LLM).
+
+**Sign-in and roles.** There are three kinds of user, each with its own screens:
+
+| Who | Signs in? | Sees |
+|---|---|---|
+| ASHA worker | yes | Home (start a household session), Home Visits, Prepare Quiz, Learn, Profile |
+| Supervisor | yes | Dashboard (sessions + agent log, visits, referrals, coverage map, evaluation), Learn, Published quizzes |
+| Household learner | **no account** | Learn, and published quizzes opened from the link the ASHA shares |
+
+Access is enforced twice: `proxy.ts` redirects people away from pages their role cannot open, and every backend route checks the role again (`backend/auth.py`). An ASHA calling a dashboard API gets `403`; signed-out calls get `401`. The sign-in token is kept in an httpOnly cookie that browser code cannot read, stored on the backend only as a SHA-256 hash, and revoked on sign-out. Passwords are PBKDF2-hashed.
+
+Demo accounts are created on first start (turn off with `SEED_DEMO_USERS=false`):
+
+| Username | Password | Role |
+|---|---|---|
+| `asha` | `asha123` | ASHA worker (Savitha, Mysuru) |
+| `asha2` | `asha123` | ASHA worker (Rekha, Mandya) |
+| `supervisor` | `super123` | Supervisor |
+
+**The main flow is `/session` (proposal Figure 1).** The ASHA home page starts it; the quiz builder is now the separate "Prepare Quiz" tool for making shareable quizzes. Sessions record which ASHA ran them; an ASHA sees only her own.
+
+**All four agents use the LLM**, through the one shared adapter (`services/bedrock.py`, which routes to OpenAI by default), each with its own prompt and output schema (`backend/agents/llm.py`). The model only *chooses* among ids the backend offers; code validates every choice and falls back to the rules on a provider error or invalid output; every generated sentence is screened by the safety controller.
+
+| Agent | What the LLM does | What stays fixed |
+|---|---|---|
+| Planning | picks approved lesson blocks for the topic, time and gaps | ids, module membership and time budget are validated |
+| Retrieval | turns a question (Kannada, English, romanised Kannada) into search terms, tags and modules; refines once if nothing matches | answers are approved lesson text only; unknown tags/modules are dropped |
+| Tutor | picks reinforcement and next-activity lessons from approved candidates; writes a short teaching tip for the ASHA | scoring, difficulty level and next questions are fixed rules |
+| Summary | writes a recap and next-visit suggestion; orders open gaps by priority | score, gaps, referrals come from the session log |
+
+The supervisor's **Sessions** tab shows which agents used the AI in each session and a **View agent log** button with every handoff.
+
+**Household visits** are stored on the backend per ASHA. The quiz score is no longer typed in: the household takes the checkpoint quiz together during the session, and a visit linked to that session copies its score. The session summary has a **Log this visit** button that links them. Supervisors see all visits and a district coverage map computed from them.
+
+**Safety.** Romanised Kannada rules were added ("nanage jwara", "eshtu maathre", "maathre ... kodabahuda") alongside the Kannada-script ones; they need review by a native speaker.
+
+**Other fixes.** Quiz questions now sit inside their cards; the quiz builder hides revision numbers, call counters and traces in a collapsed *Technical details* panel and explains a missing API key in plain words; the unused, unauthenticated TypeScript mock routes (`/api/session`, `/api/safety`) and their code were removed; two backend tests that failed only on Windows were fixed.
+
+**Measured (Nov 2026, live `gpt-6-luna`):** 116 backend tests pass (1 skipped on Windows), 18 browser tests pass, and `python -m eval.run_eval` passes 30/30 scenarios with 8/8 AI lesson plans passing validation and 10/10 medical questions routed correctly. Model output varies between runs, so rerun the evaluation before reporting.
+
+### Running on Windows (PowerShell)
+
+```powershell
+# once
+cd backend
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+copy .env.example .env      # then set OPENAI_API_KEY=... and OPENAI_MOCK=false
+cd ..
+npm ci
+
+# terminal 1: backend
+cd backend
+.venv\Scripts\python -m uvicorn main:app --reload --port 8000
+
+# terminal 2: frontend
+npm run dev
+```
+
+Open http://localhost:3000 and sign in with a demo account. To start with empty data, stop the backend and delete `backend/amr_jagruti.db` (sessions, visits, accounts; accounts are recreated) or `backend/quiz_bank.db` (quizzes).
 
 ## Quickstart
 
@@ -55,17 +120,17 @@ Published versions are immutable. Editing a published quiz creates pending chang
 
 The OpenAI key is needed for quiz generation and regeneration only. Editing, publication, browsing published quizzes, attempts and server-side scoring do not call the model. The authoring trace shows request prompts, source searches, proposal tool calls and token usage. Luna remains the default, with the existing bounded call limits; `QUIZ_MAX_OUTPUT_TOKENS=4000` permits a complete concise batch and `QUIZ_MAX_QUESTIONS=10` caps its size.
 
-The builder is an unauthenticated reviewer surface in this local prototype. Learner routes hide drafts and answer keys, but separate authenticated ASHA access is required before exposing reviewer tools in a production deployment. Learners do not need their own OpenAI key. To share with other devices, host the same frontend and backend where those devices can reach them; a `localhost` link only works on the machine running the app.
+Drafting, review and publication require a signed-in ASHA worker; published quizzes and attempts are public so households can use them without an account. Learner routes hide drafts and answer keys. Learners do not need their own OpenAI key. To share with other devices, host the same frontend and backend where those devices can reach them; a `localhost` link only works on the machine running the app.
 
 The included CDC source and the document-addition instructions below apply to quiz generation. Source admission is separate from ASHA review: exact quote checks confirm that a passage exists, while the reviewer checks that it actually supports the answer. Broader source collection and a reusable, clinically reviewed question bank remain follow-up content work.
 
 ## LLM-driven sessions with ASHA review
 
-The earlier step-by-step experiment remains available at `/agent-session`, where you can start or resume a session. The home page now leads to batch quiz preparation instead. The original supervisor dashboard statistics describe legacy sessions; the new session list and per-session trace are separate. Luna calls local tools to retrieve document passages and propose the next activity. It can choose lessons, quizzes, reinforcement, answers and a summary based on the recorded session and learner responses. The app executes tools and returns their results to the model, continuing until it has a proposal for human review.
+The earlier step-by-step experiment remains available at `/agent-session` (ASHA sign-in required). The home page starts the `/session` flow instead. The original supervisor dashboard statistics describe legacy sessions; the new session list and per-session trace are separate. Luna calls local tools to retrieve document passages and propose the next activity. It can choose lessons, quizzes, reinforcement, answers and a summary based on the recorded session and learner responses. The app executes tools and returns their results to the model, continuing until it has a proposal for human review.
 
 Every generated activity pauses for **ASHA review**. The review screen shows the draft, cited source passages, and (for a quiz) the proposed answer key and explanation. ASHA can approve or request revision. Only approved activities appear in the learner view. Quiz answers are scored against the ASHA-approved key; after the learner responds, the model decides what to do next. A summary also requires approval before completion. Fixed safety checks still override medical-advice requests; model output cannot bypass those checks.
 
-The review and learner views share a browser in this prototype. They are **not separate authenticated accounts**. An authenticated reviewer role is required before use where learners must be prevented from accessing the review tools. Local session records persist across reloads and backend restarts.
+This experimental page is ASHA-only; its review and learner views share the ASHA's screen. Local session records persist across reloads and backend restarts.
 
 ### Adding documents later
 
@@ -260,7 +325,7 @@ For the batch quiz demo:
 
 For the optional step-by-step agent-session demo:
 
-1. Open `/agent-session` or use **Start Session** on the home page. Start with English and an AMR basics topic supported by the bundled CDC excerpt.
+1. Sign in as an ASHA worker and open `/agent-session`. Start with English and an AMR basics topic supported by the bundled CDC excerpt.
 2. In **ASHA review**, inspect the proposed plan and its cited passages. Expand the agent trace to see the actual request, source search and proposal tool calls.
 3. Approve the plan, then request the next activity. Each new lesson, quiz, answer or summary pauses for review again. Use **Request revision** to return corrections to the model.
 4. For a quiz, ASHA checks the proposed options, answer key and explanation against the cited passages before approving it.
@@ -301,7 +366,7 @@ A five-minute demo that covers every part of the system:
 
 ## Using OpenAI
 
-OpenAI powers the new LLM-driven sessions above. The original `/session` workflow uses OpenAI only for planning and retains rule-based retrieval, tutoring and summary behavior. Its planning output is schema-validated; invalid plans fall back to local rules. This fallback does not apply to the new agent loop.
+OpenAI powers the new LLM-driven sessions above. The main `/session` workflow uses it for all four agents (see the mid-term update above); every agent's output is validated and falls back to its rules when invalid or when the provider fails. This fallback does not apply to the new agent loop.
 
 1. Set `LLM_PROVIDER=openai` and `OPENAI_API_KEY` in `backend/.env`.
 2. Optionally set `OPENAI_MODEL` (default `gpt-6-luna`), `OPENAI_MAX_TOKENS` (default `1024`), `OPENAI_TIMEOUT_S` (default `60`), and `OPENAI_REASONING_EFFORT` (default `none`).
@@ -340,7 +405,7 @@ To check that a model is still active:
 aws bedrock get-foundation-model --model-identifier amazon.nova-pro-v1:0 --query modelDetails.modelLifecycle
 ```
 
-**Legacy Bedrock workflow:** only the planning agent calls this provider. The new LLM-driven session uses OpenAI instead. Its output must pass Pydantic schema validation and backend checks: every content ID must exist and belong to its module, and the plan must fit the time. If the output fails, the backend falls back to the rule-based plan and logs why. The retrieval, tutor, summary and safety components are deterministic.
+**Bedrock:** the four `/session` agents call whichever provider `LLM_PROVIDER` selects; the quiz builder and `/agent-session` use OpenAI only. Its output must pass Pydantic schema validation and backend checks: every content ID must exist and belong to its module, and the plan must fit the time. If the output fails, the backend falls back to the rule-based plan and logs why. The safety controller is always deterministic.
 
 ## API reference
 
@@ -471,7 +536,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-66 tests, all in mock mode, each run against a throwaway database. They cover the session flow, plans fitting 5, 10 and 15 minutes, prior gaps, rejection of invalid model plans, retrieval refinement, the score thresholds, ASHA plan edits, safety routing in English, Kannada and Hindi, questions that must not trigger the safety controller, referral privacy, the audit log, persistence across a restart, resume, the dashboard endpoints, the content repository checks, and the evaluation scenarios.
+116 tests (plus 1 skipped on Windows), all in mock mode, each run against a throwaway database. They cover sign-in and role separation, visits, the LLM agents' validation and safety screening with a fake model, romanised Kannada safety rules, the session flow, plans fitting 5, 10 and 15 minutes, prior gaps, rejection of invalid model plans, retrieval refinement, the score thresholds, ASHA plan edits, safety routing in English, Kannada and Hindi, questions that must not trigger the safety controller, referral privacy, the audit log, persistence across a restart, resume, the dashboard endpoints, the content repository checks, and the evaluation scenarios.
 
 ### Evaluation (proposal section 6)
 
@@ -489,7 +554,7 @@ This runs the 30 predefined scenarios in `eval/scenarios.json` against a throwaw
 | Invalid AI output | A01 to A05 | Invented content, over-time plans, wrong modules and provider errors fall back to the rule-based plan; a valid model plan is accepted |
 | Persistence and state | P01 to P04 | Restart, resume, out-of-order requests, unsafe start topics |
 
-It reports the four metrics from the proposal: test pass rate, medical questions routed to the correct safety category, AI lesson plans passing validation, and full sessions completed without manual fixes. The AI plan metric requires a configured live provider, so it shows "not measured" in mock mode. Run the evaluation again with OpenAI or Bedrock configured to measure it. The last recorded mock-mode run passed all 30 scenarios.
+It reports the four metrics from the proposal: test pass rate, medical questions routed to the correct safety category, AI lesson plans passing validation, and full sessions completed without manual fixes. The AI plan metric requires a configured live provider, so it shows "not measured" in mock mode. Run the evaluation again with OpenAI or Bedrock configured to measure it. The last recorded run (live OpenAI, 2026-11-15) passed all 30 scenarios, with 8/8 AI lesson plans passing validation, 10/10 medical questions routed correctly and 0 provider errors.
 
 ### Browser tests (Playwright)
 
@@ -501,7 +566,7 @@ python -m playwright install chromium
 pytest e2e -q
 ```
 
-13 tests drive the app in a phone-sized Chromium window: a full session to the summary, a wrong answer lowering the level, the safety banner, the urgent helpline, resume after reload, the dashboard and closing a referral, the settings page, the app icons, language persistence across pages and reloads, text size, the learning library, and the home page sections. The tests create sessions in your local database. They skip themselves if the app is not running.
+18 tests drive the app in a phone-sized Chromium window, signing in through the real form: role redirects for signed-out users, ASHA and supervisor, logging a visit linked to a session, the quiz layout, a full session to the summary, a wrong answer lowering the level, the safety banner, the urgent helpline, resume after reload, the dashboard and closing a referral, the settings page, the app icons, language persistence across pages and reloads, text size, the learning library, and the home page sections. The tests create sessions in your local database. They skip themselves if the app is not running.
 
 ## Adding content
 
@@ -566,10 +631,12 @@ Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, N
 
 ## Known limitations and next steps
 
-- **Earlier evaluation state.** The latest recorded evaluation used mock mode. Configure either provider and rerun the evaluation to measure the AI plan metric.
+- **Agent evaluation is still narrow.** The live evaluation measures plan validity and safety routing; the retrieval, tutor and summary agents' output quality is not yet scored. Planned next: retrieval hit-rate on a labelled question set (including romanised Kannada) and a rubric-based check of tutor tips and summaries.
 - **New interface text in Kannada and Hindi** (menus, headings, home page sections) was written for the redesign and should be checked by native speakers. Lesson content is unchanged.
 - **There is no reviewed Hindi content yet.** Hindi sessions show English lesson text, and the Hindi safety phrases and messages need native review.
 - **Next task: expand the source-backed question bank.** The current library has 15 blocks and only 5 quiz questions. Find suitable official questions or draft additional questions from official guidance, recording per-question source URLs, supporting passages and whether each question is copied, adapted or AI-drafted. Check answers, explanations and translations before marking items approved; do not describe source-based drafts as government-approved. Keep this expansion separate from the current OpenAI setup task; see [Adding content](#adding-content).
+- **Demo accounts and passwords are public** (listed above and on the sign-in page). Change them or set `SEED_DEMO_USERS=false` before any real use.
+- **Generated Kannada text** (tutor tips, summary recaps) and the romanised Kannada safety phrases need native-speaker review.
 - **The local database is per person.** For one shared dashboard across several phones, the backend and database need to be hosted in one place.
-- **Profiles, visits, spaced-repetition gaps and district coverage** are still kept in each browser's localStorage.
-- **Some code is now unused.** `app/api/session/route.ts`, `app/api/safety/route.ts`, `lib/agents/*`, `lib/safety.ts`, `lib/safety-log.ts` and `lib/session-store.ts` can be removed once the team agrees.
+- **Profile display details and spaced-repetition gaps** are still kept in each browser's localStorage (visits and coverage are now on the backend).
+- The unused TypeScript mock agents and routes were removed in the mid-term update; they remain in git history.

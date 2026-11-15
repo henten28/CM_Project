@@ -75,7 +75,10 @@ def test_rejects_path_traversal_without_falling_back_to_demo(corpus, bad_path):
 def test_rejects_symlink_escape(corpus, tmp_path):
     outside = tmp_path / "outside.md"
     outside.write_text("should not be indexed", encoding="utf-8")
-    (corpus / "documents" / "escape.md").symlink_to(outside)
+    try:
+        (corpus / "documents" / "escape.md").symlink_to(outside)
+    except OSError:
+        pytest.skip("this OS account cannot create symlinks (Windows without Developer Mode)")
     write_manifest(corpus / "sources.json", [
         {"id": "escape", "title": "Escape", "file": "escape.md", "approved": True},
     ])

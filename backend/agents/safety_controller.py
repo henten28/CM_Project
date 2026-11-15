@@ -51,9 +51,29 @@ _HI_RULES: List[Tuple[str, str, List[str]]] = [
     ("P-HI", "PERSONAL_MEDICAL", ["मुझे बुखार", "मेरे बच्चे", "मेरी बेटी", "मेरे बेटे", "मेरे पति", "मेरी मां", "मेरी माँ", "गर्भवती", "mujhe bukhar"]),
 ]
 
+# Romanised Kannada ("Kanglish"), the way many people type on phones. Conservative patterns that need a
+# personal or medicine-action word, so teaching questions ("ulida maathre yaake kodabaradu?") stay SAFE.
+# NEEDS REVIEW by a native Kannada speaker before field use.
+_KN_MED = r"(maathre|mathre|matre|maatre|tablet\w*|aushadha|aushada|oushadha|oushada|ausadha|antibiotic\w*|syrup|injection)"
+_KN_FAMILY = r"(magu|maguvige|maganige|magalige|maga|magalu|gandanige|ganda|hendathige|hendati|ammanige|amma|appanige|appa|ajji|ajja)"
+_KN_SYMPTOM = r"(jwara|jvara|kemmu|novu|nogu|bedhi|bhedi|vanti|vaanthi|shaita|sheeta|negadi|soanku|sonku|ushaar\w*|husharilla)"
+_KN_ROMAN_RULES: List[Tuple[str, str, str]] = [
+    ("U-KNR-BREATH", "URGENT", r"\busir\w*\b[^.?!]{0,20}\b(kashta|aagtilla|agtilla|agta illa|bartilla|baruttilla|nintide|nillide)"),
+    ("U-KNR-CHEST", "URGENT", r"\bede\s*novu\b"),
+    ("U-KNR-CONSCIOUS", "URGENT", r"\b(prajne|prajna|echchara|eccara)\b[^.?!]{0,15}\b(illa|tappide|hogide)\b"),
+    ("D-KNR-AMOUNT", "DOSAGE", r"\beshtu\s+(" + _KN_MED[1:-1] + r"|dose|doseu|mg|ml|sala|baari)\b"),
+    ("S-KNR-GIVE-TAKE", "SELF_MEDICATION", r"\b" + _KN_MED + r"\b[^.?!]{0,30}\b(kodabahuda|kodbahuda|kodla|kodali|kodabeka|"
+     r"tagobahuda|togobahuda|tagolla|togolla|tegedukollabahuda|tegedukollali|nillisabahuda|nilsbahuda|nilsla|nillisali)\b"),
+    ("S-KNR-WHICH", "SELF_MEDICATION", r"\byaava\s+" + _KN_MED + r"\b"),
+    ("P-KNR-SELF", "PERSONAL_MEDICAL", r"\bnanage\b[^.?!]{0,25}\b" + _KN_SYMPTOM + r"\b"),
+    ("P-KNR-FAMILY", "PERSONAL_MEDICAL", r"\bnanna\s+" + _KN_FAMILY + r"\b[^.?!]{0,30}\b" + _KN_SYMPTOM + r"\b"),
+    ("P-KNR-PREGNANT", "PERSONAL_MEDICAL", r"\b(garbhini|garbini)\b"),
+]
+
 _PRIORITY = ["URGENT", "DOSAGE", "SELF_MEDICATION", "PERSONAL_MEDICAL"]
 
-_COMPILED: List[Tuple[str, str, Pattern]] = [(rid, cat, re.compile(rx, re.IGNORECASE)) for rid, cat, rx in _EN_RULES]
+_COMPILED: List[Tuple[str, str, Pattern]] = [(rid, cat, re.compile(rx, re.IGNORECASE))
+                                             for rid, cat, rx in _EN_RULES + _KN_ROMAN_RULES]
 
 # Fixed messages. kn/en copied verbatim from lib/safety.ts; hi NEEDS native review.
 _PRESCRIBING_KN = "AMR ಜಾಗೃತಿ ಔಷಧ ಸೂಚಿಸಲು ಅಥವಾ ಡೋಸ್ ಹೇಳಲು ಸಾಧ್ಯವಿಲ್ಲ. ಔಷಧಕ್ಕಾಗಿ ದಯವಿಟ್ಟು ಅರ್ಹ ವೈದ್ಯರ ಬಳಿ ತೆರಳಿ."

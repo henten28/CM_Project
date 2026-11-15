@@ -47,9 +47,10 @@ def _safety_gate(s: SessionRecord, text: str, where: str) -> Optional[SafetyResu
 
 # ── 1. start: planning agent proposes, ASHA reviews ──
 
-async def start(topic: str, duration: int, lang: str, prior_gaps: List[str]) -> Dict[str, Any]:
+async def start(topic: str, duration: int, lang: str, prior_gaps: List[str],
+                asha_id: Optional[str] = None, asha_name: Optional[str] = None) -> Dict[str, Any]:
     s = SessionRecord(id=f"sess-{uuid.uuid4().hex[:12]}", topic=topic, durationMinutes=duration, lang=lang,
-                      priorGaps=prior_gaps)
+                      priorGaps=prior_gaps, ashaId=asha_id, ashaName=asha_name)
     _handoff(s, "api", "orchestrator", "start", duration=duration, lang=lang, priorGaps=prior_gaps)
 
     safety = _safety_gate(s, topic, "start")
@@ -104,9 +105,11 @@ def approve(s: SessionRecord, edited_content_ids: Optional[List[str]]) -> Dict[s
             "warnings": warnings}
 
 
-def answer(s: SessionRecord, answers: List[AnswerIn]) -> Dict[str, Any]:
+async def answer(s: SessionRecord, answers: List[AnswerIn]) -> Dict[str, Any]:
     _require(s, "IN_PROGRESS")
-    result, records = tutor_agent.run(s, answers)
+    # fixed rules score the answers; the tutor agent (LLM) then picks reinforcement among approved candidates
+    result, records, trace = await tutor_agent.run_adaptive(s, answers)
+    _handoff(s, "tutor_agent", "orchestrator", "tutor_decision", **trace)
     s.answers += records
     s.askedQuestionIds += [q.id for q in result.nextQuestions if q.id not in s.askedQuestionIds]
 
@@ -122,16 +125,17 @@ def answer(s: SessionRecord, answers: List[AnswerIn]) -> Dict[str, Any]:
     return {"tutor": result, "content": content}
 
 
-def ask(s: SessionRecord, text: str) -> Dict[str, Any]:
+async def ask(s: SessionRecord, text: str) -> Dict[str, Any]:
     _require(s, "AWAITING_APPROVAL", "IN_PROGRESS", "SAFETY_HOLD")
+    # the safety gate runs before any agent (or the LLM) sees the question
     safety = _safety_gate(s, text, "ask")
     if safety:
         db.save(s)
         return {"safety": safety, "content": None}
-    # safe educational question: answer only with approved content, never generated text
-    content = retrieval_agent.search(query=text, lang=s.lang, limit=3)
+    # safe educational question: the retrieval agent plans the search, but the answer is approved content only
+    content, trace = await retrieval_agent.agentic_search(text, lang=s.lang, limit=3)
     _handoff(s, "retrieval_agent", "asha", "answer_from_library", contentIds=content.contentIds,
-             refinements=content.refinements)
+             refinements=content.refinements, **trace)
     db.save(s)
     return {"safety": None, "content": content}
 
@@ -153,13 +157,13 @@ def resume(s: SessionRecord) -> Dict[str, Any]:
 
 # ── 3. complete: summary agent ──
 
-def complete(s: SessionRecord) -> Dict[str, Any]:
+async def complete(s: SessionRecord) -> Dict[str, Any]:
     if s.state == "COMPLETED" and s.summary is not None:
         return {"summary": s.summary}  # idempotent
-    s.summary = summary_agent.run(s)
+    s.summary, trace = await summary_agent.run_with_llm(s)
     s.state = "COMPLETED"
     s.completedAt = now_iso()
     _handoff(s, "summary_agent", "dashboard", "session_summary", score=s.summary.scorePercent,
-             gaps=[g.conceptTag for g in s.summary.remainingGaps], referrals=len(s.summary.referralTasks))
+             gaps=[g.conceptTag for g in s.summary.remainingGaps], referrals=len(s.summary.referralTasks), **trace)
     db.save(s)
     return {"summary": s.summary}

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-24T14:16:00.331221+00:00",
-  "mode": "mock",
-  "model": null,
+  "generatedAt": "2026-11-15T16:33:26.289871+00:00",
+  "mode": "openai",
+  "model": "gpt-6-luna",
   "contentVersion": "2026.10.0",
   "metrics": {
     "testPassRate": {
@@ -20,9 +20,14 @@
       "percent": 0.0
     },
     "aiPlansPassingValidation": {
+      "numerator": 8,
+      "denominator": 8,
+      "percent": 100.0
+    },
+    "providerErrors": {
       "numerator": 0,
-      "denominator": 0,
-      "percent": null
+      "denominator": 8,
+      "percent": 0.0
     },
     "fullSessionsCompleted": {
       "numerator": 8,
@@ -36,56 +41,56 @@
       "type": "session",
       "title": "Antibiotics, 10 min, Kannada, all correct",
       "passed": true,
-      "detail": "plan rules, level hard, 2 module(s) covered"
+      "detail": "plan llm, level hard, 2 module(s) covered"
     },
     {
       "id": "S02",
       "type": "session",
       "title": "AMR, 15 min, English, all wrong",
       "passed": true,
-      "detail": "plan rules, level easy, 3 module(s) covered"
+      "detail": "plan llm, level easy, 2 module(s) covered"
     },
     {
       "id": "S03",
       "type": "session",
       "title": "Prevention, 5 min, Kannada, mixed",
       "passed": true,
-      "detail": "plan rules, level medium, 1 module(s) covered"
+      "detail": "plan llm, level medium, 1 module(s) covered"
     },
     {
       "id": "S04",
       "type": "session",
       "title": "Sharing, 10 min, Hindi, all correct",
       "passed": true,
-      "detail": "plan rules, level hard, 2 module(s) covered"
+      "detail": "plan llm, level hard, 1 module(s) covered"
     },
     {
       "id": "S05",
       "type": "session",
       "title": "Case study, 15 min, English, mixed",
       "passed": true,
-      "detail": "plan rules, level medium, 2 module(s) covered"
+      "detail": "plan llm, level medium, 1 module(s) covered"
     },
     {
       "id": "S06",
       "type": "session",
       "title": "General, 5 min, English, all wrong, prior gap stays open",
       "passed": true,
-      "detail": "plan rules, level easy, 1 module(s) covered"
+      "detail": "plan llm, level easy, 1 module(s) covered"
     },
     {
       "id": "S07",
       "type": "session",
       "title": "Antibiotics, 15 min, Kannada, prior gaps planned first",
       "passed": true,
-      "detail": "plan rules, level hard, 3 module(s) covered"
+      "detail": "plan llm, level hard, 3 module(s) covered"
     },
     {
       "id": "S08",
       "type": "session",
       "title": "Kannada topic text, 10 min, mixed",
       "passed": true,
-      "detail": "plan rules, level medium, 2 module(s) covered"
+      "detail": "plan llm, level medium, 2 module(s) covered"
     },
     {
       "id": "F01",
@@ -218,7 +223,7 @@
       "type": "persistence",
       "title": "Session survives a backend restart",
       "passed": true,
-      "detail": "7 log entries and 1 answer restored"
+      "detail": "8 log entries and 1 answer restored"
     },
     {
       "id": "P02",
@@ -240,6 +245,48 @@
       "title": "Unsafe start topic is held and the referral is saved",
       "passed": true,
       "detail": "held, referral recorded"
+    }
+  ],
+  "planEvents": [
+    {
+      "scenario": "S01",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S02",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S03",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S04",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S05",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S06",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S07",
+      "planSource": "llm",
+      "notes": []
+    },
+    {
+      "scenario": "S08",
+      "planSource": "llm",
+      "notes": []
     }
   ]
 }
