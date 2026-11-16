@@ -1,9 +1,9 @@
 import re
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agents import llm
+from agents import glossary, llm
 from agents.content import display_lang, repo
 from agents.models import ContentHit, RetrievalResult
 
@@ -25,10 +25,14 @@ def _haystack(block: Dict) -> str:
     return " ".join(parts).lower()
 
 
-def _score(block: Dict, tokens: List[str], tags: Set[str], module_boost: Set[str], hay: str) -> float:
+def _score(block: Dict, tokens: List[str], tags: Set[str], module_boost: Set[str], hay: str,
+           glossary_tags: Set[str] = frozenset(), concepts: Sequence[Sequence[str]] = ()) -> float:
     block_tags = {t.lower() for t in block["conceptTags"]}
     score = 3.0 * len(tags & block_tags)  # concept-tag filter hits weigh most
-    score += min(sum(1 for t in tokens if t in hay), 5)  # keyword hits, capped
+    score += 1.5 * len(glossary_tags & block_tags)  # tags implied by glossary terms in the query
+    # keyword hits, capped; a glossary concept counts once however many of its spellings appear
+    hits = sum(1 for t in tokens if t in hay) + sum(1 for forms in concepts if any(f in hay for f in forms))
+    score += min(hits, 5)
     if block["moduleId"] in module_boost:
         score += 1.5  # topic index points at this module
     return score
@@ -68,6 +72,7 @@ def search(
     min_results: int = 1,
     limit: int = 5,
     exclude_ids: Iterable[str] = (),
+    expand: bool = True,
 ) -> RetrievalResult:
     r = repo()
     tokens = _tokens(query)
@@ -75,11 +80,23 @@ def search(
     modules = set(module_ids)
     excluded = set(exclude_ids)
 
-    # topic index keywords (en + kn) map free text to modules
+    # glossary expansion searches the English and Kannada-script forms of terms written in any script,
+    # so "jwara", "ಜ್ವರ" and "fever" all search the same way
+    glossary_tags: Set[str] = set()
+    concepts: List[List[str]] = []
     q_lower = query.lower()
+    if expand and query:
+        expansion = glossary.expand(query)
+        concepts = expansion.forms
+        covered = {f for forms in concepts for f in forms}
+        tokens = [t for t in tokens if t not in covered]  # already counted through their concept
+        glossary_tags = {t.lower() for t in expansion.tags}
+        q_lower = " ".join([q_lower] + expansion.en + expansion.kn).lower()
+
+    # topic index keywords (en + kn) map free text to modules
     module_boost = {m for key, mods in r.topic_index.items() if key in q_lower for m in mods}
 
-    has_criteria = bool(tokens or tags or modules or module_boost)
+    has_criteria = bool(tokens or tags or modules or module_boost or glossary_tags or concepts)
     tag_words = [w for t in tags for w in t.split("-") if len(w) >= 3]
 
     # refinement passes: each one relaxes a filter when coverage is short
@@ -103,7 +120,7 @@ def search(
                 continue
             if mods and b["moduleId"] not in mods:
                 continue
-            s = _score(b, toks, tags, module_boost, _haystack(b))
+            s = _score(b, toks, tags, module_boost, _haystack(b), glossary_tags, concepts)
             if mods:
                 s += 2.0  # explicitly requested module
             if s <= 0 and has_criteria:

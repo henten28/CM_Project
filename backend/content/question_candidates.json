@@ -1,0 +1,682 @@
+{
+ "description": "Candidate quiz questions for content/modules.json, each tied to a verbatim passage in the knowledge corpus. origin is copied (taken word for word from an official question bank), adapted (an official question reworded) or ai-drafted (written by an AI from the passage). None of these are government-approved; they cite public awareness sources. To promote one: a team member checks the answer key, explanation and passage, a Kannada speaker checks the Kannada, both fill in review, then copy the question into modules.json quiz with a new id and reviewStatus approved, and raise contentVersion.",
+ "version": 1,
+ "created": "2026-11-16",
+ "candidates": [
+  {
+   "id": "qc001",
+   "conceptTag": "virus",
+   "question": {
+    "kn": "ಇವುಗಳಲ್ಲಿ ಯಾವ ಕಾಯಿಲೆಗೆ ಪ್ರತಿಜೀವಕಗಳು ಸಹಾಯ ಮಾಡುವುದಿಲ್ಲ?",
+    "en": "Which of these illnesses will antibiotics NOT help?"
+   },
+   "options": [
+    {
+     "kn": "ಗಂಟಲಿನ ಸ್ಟ್ರೆಪ್ ಸೋಂಕು",
+     "en": "Strep throat"
+    },
+    {
+     "kn": "ಮೂತ್ರನಾಳದ ಸೋಂಕು (UTI)",
+     "en": "Urinary tract infection (UTI)"
+    },
+    {
+     "kn": "ಸಾಮಾನ್ಯ ಶೀತ",
+     "en": "Common cold"
+    },
+    {
+     "kn": "ನಾಯಿಕೆಮ್ಮು",
+     "en": "Whooping cough"
+    }
+   ],
+   "correctIndex": 2,
+   "explanation": {
+    "kn": "ಸಾಮಾನ್ಯ ಶೀತ ವೈರಸ್‌ನಿಂದ ಬರುತ್ತದೆ. ಪ್ರತಿಜೀವಕಗಳು ಸ್ಟ್ರೆಪ್ ಗಂಟಲು ಸೋಂಕು, ನಾಯಿಕೆಮ್ಮು, ಮೂತ್ರನಾಳದ ಸೋಂಕಿನಂತಹ ಕೆಲವು ಬ್ಯಾಕ್ಟೀರಿಯಾ ಸೋಂಕುಗಳಿಗೆ ಮಾತ್ರ ಕೆಲಸ ಮಾಡುತ್ತವೆ.",
+    "en": "A common cold is caused by a virus. Antibiotics only treat certain infections caused by bacteria, such as strep throat, whooping cough and UTI."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Antibiotics do not treat infections caused by viruses such as those that cause"
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc002",
+   "conceptTag": "virus",
+   "question": {
+    "kn": "ಶೀತದ ಸಮಯದಲ್ಲಿ ದಪ್ಪ ಹಳದಿ ಅಥವಾ ಹಸಿರು ಕಫ ಬಂದರೆ ಪ್ರತಿಜೀವಕ ಬೇಕು ಎಂದು ಅರ್ಥವೇ?",
+    "en": "Does thick yellow or green mucus during a cold mean antibiotics are needed?"
+   },
+   "options": [
+    {
+     "kn": "ಹೌದು, ಬಣ್ಣ ಬ್ಯಾಕ್ಟೀರಿಯಾ ಸೋಂಕನ್ನು ತೋರಿಸುತ್ತದೆ",
+     "en": "Yes, the colour shows a bacterial infection"
+    },
+    {
+     "kn": "ಇಲ್ಲ, ಕಫ ಹಳದಿ ಅಥವಾ ಹಸಿರಾಗಿದ್ದರೂ ಶೀತ ವೈರಸ್‌ನಿಂದ ಬರುತ್ತದೆ",
+     "en": "No, colds are caused by viruses even when mucus is yellow or green"
+    },
+    {
+     "kn": "ಕಫ ಹಸಿರಾಗಿದ್ದರೆ ಮಾತ್ರ",
+     "en": "Only if the mucus is green"
+    },
+    {
+     "kn": "ಮಕ್ಕಳಿಗೆ ಮಾತ್ರ",
+     "en": "Only for children"
+    }
+   ],
+   "correctIndex": 1,
+   "explanation": {
+    "kn": "ಕಫ ದಪ್ಪ, ಹಳದಿ ಅಥವಾ ಹಸಿರಾಗಿದ್ದರೂ ಶೀತ ಮತ್ತು ಮೂಗು ಸೋರುವಿಕೆ ವೈರಸ್‌ನಿಂದ ಬರುತ್ತವೆ. ಪ್ರತಿಜೀವಕಗಳು ವೈರಸ್ ಮೇಲೆ ಕೆಲಸ ಮಾಡುವುದಿಲ್ಲ.",
+    "en": "Colds and runny noses are caused by viruses, even if the mucus is thick, yellow or green. Antibiotics do not work on viruses."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Colds and runny noses, even if the mucus is thick, yellow or green"
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc003",
+   "conceptTag": "bacteria",
+   "question": {
+    "kn": "ಬ್ಯಾಕ್ಟೀರಿಯಾದಿಂದ ಬರುವ ಎಲ್ಲಾ ಸೋಂಕುಗಳಿಗೆ ಪ್ರತಿಜೀವಕ ಬೇಕೇ?",
+    "en": "Do all infections caused by bacteria need antibiotics?"
+   },
+   "options": [
+    {
+     "kn": "ಇಲ್ಲ, ಕೆಲವು ಸೋಂಕುಗಳು ಪ್ರತಿಜೀವಕ ಇಲ್ಲದೆಯೂ ಗುಣವಾಗುತ್ತವೆ",
+     "en": "No, some get better without antibiotics"
+    },
+    {
+     "kn": "ಹೌದು, ಪ್ರತಿಯೊಂದು ಬ್ಯಾಕ್ಟೀರಿಯಾ ಸೋಂಕಿಗೂ",
+     "en": "Yes, every bacterial infection"
+    },
+    {
+     "kn": "ದೊಡ್ಡವರ ಸೋಂಕುಗಳಿಗೆ ಮಾತ್ರ",
+     "en": "Only infections in adults"
+    },
+    {
+     "kn": "ಜ್ವರ ಇದ್ದರೆ ಮಾತ್ರ",
+     "en": "Only if there is fever"
+    }
+   ],
+   "correctIndex": 0,
+   "explanation": {
+    "kn": "ಬ್ಯಾಕ್ಟೀರಿಯಾದಿಂದ ಬರುವ ಕೆಲವು ಸೋಂಕುಗಳು, ಉದಾಹರಣೆಗೆ ಹಲವು ಸೈನಸ್ ಸೋಂಕುಗಳು ಮತ್ತು ಕೆಲವು ಕಿವಿ ಸೋಂಕುಗಳು, ಪ್ರತಿಜೀವಕ ಇಲ್ಲದೆಯೂ ಗುಣವಾಗಬಹುದು. ಪ್ರತಿಜೀವಕ ಬೇಕೇ ಎಂಬುದನ್ನು ಆರೋಗ್ಯ ವೃತ್ತಿಪರರು ನಿರ್ಧರಿಸುತ್ತಾರೆ.",
+    "en": "Some infections caused by bacteria can still get better without antibiotics, for example many sinus infections and some ear infections. A healthcare professional decides when antibiotics are needed."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Some infections caused by bacteria can still get better without antibiotics."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc004",
+   "conceptTag": "leftover",
+   "question": {
+    "kn": "ಪ್ರತಿಜೀವಕಗಳನ್ನು ಮುಂದಿನ ಕಾಯಿಲೆಗಾಗಿ ಯಾಕೆ ಉಳಿಸಿಟ್ಟುಕೊಳ್ಳಬಾರದು?",
+    "en": "Why should antibiotics not be saved for a future illness?"
+   },
+   "options": [
+    {
+     "kn": "ಅವುಗಳ ಬಣ್ಣ ಹೋಗುತ್ತದೆ",
+     "en": "They lose their colour"
+    },
+    {
+     "kn": "ಅವು ಮಕ್ಕಳಿಗೆ ಮಾತ್ರ",
+     "en": "They are only for children"
+    },
+    {
+     "kn": "ತಪ್ಪು ಔಷಧ ಸರಿಯಾದ ಚಿಕಿತ್ಸೆಯನ್ನು ತಡಮಾಡಬಹುದು ಮತ್ತು ಅಡ್ಡ ಪರಿಣಾಮ ಉಂಟುಮಾಡಬಹುದು",
+     "en": "The wrong medicine may delay correct treatment and cause side effects"
+    },
+    {
+     "kn": "ಕಾಲ ಕಳೆದಂತೆ ಅವು ಹೆಚ್ಚು ಶಕ್ತಿಶಾಲಿಯಾಗುತ್ತವೆ",
+     "en": "They become stronger over time"
+    }
+   ],
+   "correctIndex": 2,
+   "explanation": {
+    "kn": "ಮುಂದಿನ ಕಾಯಿಲೆಗೆ ತಪ್ಪು ಔಷಧ ತೆಗೆದುಕೊಂಡರೆ ಸರಿಯಾದ ಚಿಕಿತ್ಸೆ ತಡವಾಗಬಹುದು ಮತ್ತು ಗಂಭೀರ ಅಡ್ಡ ಪರಿಣಾಮ ಆಗಬಹುದು. ಉಳಿದ ಔಷಧವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ವಿಲೇವಾರಿ ಮಾಡುವ ಬಗ್ಗೆ ಔಷಧಿಕಾರರನ್ನು ಕೇಳಿ.",
+    "en": "Taking the wrong medicine for a future illness may delay correct treatment and can cause severe side effects. Ask a pharmacist how to discard leftover medicines safely."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Do not save them for later. Taking the wrong medicine for a future illness may delay correct treatment and can cause severe side effects."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc005",
+   "conceptTag": "sharing",
+   "question": {
+    "kn": "ಬೇರೆಯವರಿಗೆ ಸೂಚಿಸಿದ ಪ್ರತಿಜೀವಕವನ್ನು ಒಬ್ಬರು ತೆಗೆದುಕೊಂಡರೆ ಏನಾಗಬಹುದು?",
+    "en": "What can happen if a person takes antibiotics prescribed for someone else?"
+   },
+   "options": [
+    {
+     "kn": "ಏನೂ ಆಗುವುದಿಲ್ಲ, ಎಲ್ಲಾ ಪ್ರತಿಜೀವಕಗಳು ಒಂದೇ",
+     "en": "Nothing, all antibiotics are the same"
+    },
+    {
+     "kn": "ಅದು ಬೇಗ ಕೆಲಸ ಮಾಡುತ್ತದೆ",
+     "en": "It works faster"
+    },
+    {
+     "kn": "ಅದು ನಿರೋಧ ತಡೆಯುತ್ತದೆ",
+     "en": "It prevents resistance"
+    },
+    {
+     "kn": "ಸರಿಯಾದ ಚಿಕಿತ್ಸೆ ತಡವಾಗಬಹುದು ಅಥವಾ ಅಡ್ಡ ಪರಿಣಾಮ ಆಗಬಹುದು",
+     "en": "It may delay the right treatment or cause side effects"
+    }
+   ],
+   "correctIndex": 3,
+   "explanation": {
+    "kn": "ಬೇರೆಯವರಿಗೆ ಸೂಚಿಸಿದ ಪ್ರತಿಜೀವಕದಿಂದ ಸರಿಯಾದ ಚಿಕಿತ್ಸೆ ತಡವಾಗಬಹುದು, ಕಾಯಿಲೆ ಇನ್ನಷ್ಟು ಹೆಚ್ಚಾಗಬಹುದು ಅಥವಾ ಅಡ್ಡ ಪರಿಣಾಮ ಆಗಬಹುದು.",
+    "en": "Antibiotics prescribed for someone else may delay the best treatment, make the person even sicker or cause side effects."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Do not take antibiotics prescribed for someone else. This may delay the best treatment for you, make you even sicker or cause side effects."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc006",
+   "conceptTag": "AMR",
+   "question": {
+    "kn": "ಸೂಕ್ಷ್ಮಾಣು ನಿರೋಧದಲ್ಲಿ (AMR) ಔಷಧಕ್ಕೆ ನಿರೋಧ ಬೆಳೆಸಿಕೊಳ್ಳುವುದು ಯಾವುದು?",
+    "en": "In antimicrobial resistance, what becomes resistant to the medicine?"
+   },
+   "options": [
+    {
+     "kn": "ವ್ಯಕ್ತಿಯ ದೇಹ",
+     "en": "The person's body"
+    },
+    {
+     "kn": "ಸೂಕ್ಷ್ಮಾಣುಗಳು (ಕ್ರಿಮಿಗಳು)",
+     "en": "The germs"
+    },
+    {
+     "kn": "ಔಷಧದ ಬಾಟಲಿ",
+     "en": "The medicine bottle"
+    },
+    {
+     "kn": "ವೈದ್ಯರ ಚೀಟಿ",
+     "en": "The doctor's prescription"
+    }
+   ],
+   "correctIndex": 1,
+   "explanation": {
+    "kn": "ಔಷಧಗಳನ್ನು ಸೂಕ್ಷ್ಮಾಣುಗಳು ಸೋಲಿಸಿದಾಗ ಸೂಕ್ಷ್ಮಾಣು ನಿರೋಧ ಉಂಟಾಗುತ್ತದೆ. ಇದರ ಅರ್ಥ ದೇಹಕ್ಕೆ ಪ್ರತಿಜೀವಕ ನಿರೋಧ ಬಂದಿದೆ ಎಂದಲ್ಲ.",
+    "en": "Antimicrobial resistance happens when germs defeat the drugs designed to kill them. It does not mean the body is resistant to antibiotics."
+   },
+   "source": {
+    "documentId": "cdc-amr-basics",
+    "url": "https://www.cdc.gov/antimicrobial-resistance/about/",
+    "passage": "It does NOT mean your body is resistant to antibiotics or antifungals."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc007",
+   "conceptTag": "antibiotics",
+   "question": {
+    "kn": "ಹಾನಿಕಾರಕ ಸೂಕ್ಷ್ಮಾಣುಗಳ ಜೊತೆಗೆ ಪ್ರತಿಜೀವಕಗಳು ಇನ್ನೇನನ್ನು ಕೊಲ್ಲಬಹುದು?",
+    "en": "Besides harmful germs, what else can antibiotics kill?"
+   },
+   "options": [
+    {
+     "kn": "ವೈರಸ್‌ಗಳನ್ನು",
+     "en": "Viruses"
+    },
+    {
+     "kn": "ಬೇರೇನನ್ನೂ ಇಲ್ಲ",
+     "en": "Nothing else"
+    },
+    {
+     "kn": "ದೇಹವನ್ನು ಸೋಂಕಿನಿಂದ ರಕ್ಷಿಸುವ ಒಳ್ಳೆಯ ಸೂಕ್ಷ್ಮಾಣುಗಳನ್ನು",
+     "en": "Helpful germs that protect the body from infection"
+    },
+    {
+     "kn": "ಗಿಡಗಳ ಮೇಲಿನ ಶಿಲೀಂಧ್ರಗಳನ್ನು ಮಾತ್ರ",
+     "en": "Only fungi on plants"
+    }
+   ],
+   "correctIndex": 2,
+   "explanation": {
+    "kn": "ಪ್ರತಿಜೀವಕಗಳು ಸೋಂಕು ಉಂಟುಮಾಡುವ ಕೆಲವು ಸೂಕ್ಷ್ಮಾಣುಗಳನ್ನು ಕೊಲ್ಲುತ್ತವೆ, ಆದರೆ ದೇಹವನ್ನು ಸೋಂಕಿನಿಂದ ರಕ್ಷಿಸುವ ಒಳ್ಳೆಯ ಸೂಕ್ಷ್ಮಾಣುಗಳನ್ನೂ ಕೊಲ್ಲುತ್ತವೆ.",
+    "en": "Antibiotics kill some germs that cause infections, but they also kill helpful germs that protect our body from infection."
+   },
+   "source": {
+    "documentId": "cdc-amr-basics",
+    "url": "https://www.cdc.gov/antimicrobial-resistance/about/",
+    "passage": "they also kill helpful germs that protect our body from infection."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc008",
+   "conceptTag": "handwashing",
+   "question": {
+    "kn": "ಸಾಬೂನಿನಿಂದ ಕೈಯನ್ನು ಎಷ್ಟು ಹೊತ್ತು ಉಜ್ಜಬೇಕು?",
+    "en": "For how long should hands be scrubbed with soap?"
+   },
+   "options": [
+    {
+     "kn": "2 ಸೆಕೆಂಡ್",
+     "en": "2 seconds"
+    },
+    {
+     "kn": "ಕನಿಷ್ಠ 20 ಸೆಕೆಂಡ್",
+     "en": "At least 20 seconds"
+    },
+    {
+     "kn": "ನೀರಿನಿಂದ ತೊಳೆದರೆ ಸಾಕು",
+     "en": "Rinsing with water is enough"
+    },
+    {
+     "kn": "5 ನಿಮಿಷ",
+     "en": "5 minutes"
+    }
+   ],
+   "correctIndex": 1,
+   "explanation": {
+    "kn": "ಕೈಯ ಹಿಂಭಾಗ, ಬೆರಳುಗಳ ನಡುವೆ ಮತ್ತು ಉಗುರುಗಳ ಕೆಳಗೆ ಸೇರಿ ಕನಿಷ್ಠ 20 ಸೆಕೆಂಡ್ ಕೈ ಉಜ್ಜಿ.",
+    "en": "Scrub your hands for at least 20 seconds, including the backs of the hands, between the fingers and under the nails."
+   },
+   "source": {
+    "documentId": "cdc-handwashing",
+    "url": "https://www.cdc.gov/clean-hands/about/index.html",
+    "passage": "Scrub your hands for at least 20 seconds."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc009",
+   "conceptTag": "handwashing",
+   "question": {
+    "kn": "ಕೈ ತೊಳೆಯಲೇಬೇಕಾದ ಮುಖ್ಯ ಸಮಯ ಯಾವುದು?",
+    "en": "Which of these is a key time to wash hands?"
+   },
+   "options": [
+    {
+     "kn": "ಪ್ರಾಣಿ ಅಥವಾ ಪ್ರಾಣಿಗಳ ಮಲ ಮುಟ್ಟಿದ ನಂತರ",
+     "en": "After touching an animal or animal waste"
+    },
+    {
+     "kn": "ಮಲಗುವ ಮುಂಚೆ ಮಾತ್ರ",
+     "en": "Only before sleeping"
+    },
+    {
+     "kn": "ಕೈ ಕೊಳೆಯಾಗಿ ಕಂಡಾಗ ಮಾತ್ರ",
+     "en": "Only when hands look dirty"
+    },
+    {
+     "kn": "ಬೆಳಿಗ್ಗೆ ಮಾತ್ರ",
+     "en": "Only in the morning"
+    }
+   ],
+   "correctIndex": 0,
+   "explanation": {
+    "kn": "ಊಟದ ಮೊದಲು ಮತ್ತು ನಂತರ, ಶೌಚಾಲಯ ಬಳಸಿದ ನಂತರ, ಮತ್ತು ಪ್ರಾಣಿ, ಪಶು ಆಹಾರ ಅಥವಾ ಪ್ರಾಣಿಗಳ ಮಲ ಮುಟ್ಟಿದ ನಂತರ ಕೈ ತೊಳೆಯಬೇಕು.",
+    "en": "Key times include before and after eating, after using the toilet, and after touching an animal, animal feed or animal waste."
+   },
+   "source": {
+    "documentId": "cdc-handwashing",
+    "url": "https://www.cdc.gov/clean-hands/about/index.html",
+    "passage": "After touching an animal, animal feed, or animal waste"
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc010",
+   "conceptTag": "AMR",
+   "question": {
+    "kn": "ಸೂಕ್ಷ್ಮಾಣು ನಿರೋಧ ಎಲ್ಲಿ ಕಂಡುಬಂದಿದೆ?",
+    "en": "Where has antimicrobial resistance been found?"
+   },
+   "options": [
+    {
+     "kn": "ದೊಡ್ಡ ನಗರಗಳ ಆಸ್ಪತ್ರೆಗಳಲ್ಲಿ ಮಾತ್ರ",
+     "en": "Only in hospitals in big cities"
+    },
+    {
+     "kn": "ಬೇರೆ ದೇಶಗಳಲ್ಲಿ ಮಾತ್ರ",
+     "en": "Only in other countries"
+    },
+    {
+     "kn": "ಪ್ರಾಣಿಗಳಲ್ಲಿ ಮಾತ್ರ",
+     "en": "Only in animals"
+    },
+    {
+     "kn": "ಜಗತ್ತಿನ ಎಲ್ಲಾ ಪ್ರದೇಶಗಳಲ್ಲಿ",
+     "en": "In all regions of the world"
+    }
+   ],
+   "correctIndex": 3,
+   "explanation": {
+    "kn": "ಸೂಕ್ಷ್ಮಾಣು ನಿರೋಧ ಜಗತ್ತಿನ ಎಲ್ಲಾ ಪ್ರದೇಶಗಳಲ್ಲಿ ಕಂಡುಬಂದಿದೆ; ಪ್ರಯಾಣ ಮತ್ತು ವ್ಯಾಪಾರದಿಂದ ಅದು ಗಡಿಗಳನ್ನು ದಾಟಿ ಹರಡುತ್ತದೆ.",
+    "en": "Antimicrobial resistance has been found in all regions of the world, and travel and trade help it move across borders."
+   },
+   "source": {
+    "documentId": "cdc-amr-basics",
+    "url": "https://www.cdc.gov/antimicrobial-resistance/about/",
+    "passage": "Antimicrobial resistance has been found in all regions of the world."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc011",
+   "conceptTag": "causes",
+   "question": {
+    "kn": "ನಿರೋಧ ಬೆಳೆಸಿಕೊಂಡ ಸೂಕ್ಷ್ಮಾಣುಗಳು ಸಮುದಾಯದಲ್ಲಿ ಹೇಗೆ ಹರಡಬಹುದು?",
+    "en": "How can resistant germs spread in a community?"
+   },
+   "options": [
+    {
+     "kn": "ಆಸ್ಪತ್ರೆಗಳ ಮೂಲಕ ಮಾತ್ರ",
+     "en": "Only through hospitals"
+    },
+    {
+     "kn": "ಜನ, ಪ್ರಾಣಿಗಳು ಮತ್ತು ಆಹಾರದ ನಡುವೆ, ವಿಶೇಷವಾಗಿ ಕೈ ತೊಳೆಯದಿದ್ದಾಗ",
+     "en": "Between people, animals and food, especially without handwashing"
+    },
+    {
+     "kn": "ಅವು ಹರಡುವುದಿಲ್ಲ",
+     "en": "They cannot spread"
+    },
+    {
+     "kn": "ಮೊಬೈಲ್ ಫೋನ್ ಮೂಲಕ ಮಾತ್ರ",
+     "en": "Only through mobile phones"
+    }
+   ],
+   "correctIndex": 1,
+   "explanation": {
+    "kn": "ಕೈಯನ್ನು ಸರಿಯಾಗಿ ತೊಳೆಯದಿದ್ದಾಗ ನಿರೋಧ ಬೆಳೆಸಿಕೊಂಡ ಸೂಕ್ಷ್ಮಾಣುಗಳು ಆಹಾರದಿಂದ ಜನರಿಗೆ ಮತ್ತು ಜನ-ಪ್ರಾಣಿಗಳ ನಡುವೆ ಹರಡುತ್ತವೆ.",
+    "en": "Resistant germs spread from food to people and between people and animals when hands are not cleaned properly."
+   },
+   "source": {
+    "documentId": "cdc-amr-causes-spread",
+    "url": "https://www.cdc.gov/antimicrobial-resistance/causes/index.html",
+    "passage": "From food to people and between people and animals without appropriate hand hygiene."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc012",
+   "conceptTag": "prevention",
+   "question": {
+    "kn": "ಸೂಕ್ಷ್ಮಾಣು ನಿರೋಧ ಹರಡುವುದನ್ನು ನಿಧಾನಗೊಳಿಸಲು ಯಾವ ಸರಳ ಕ್ರಮ ಸಹಾಯ ಮಾಡುತ್ತದೆ?",
+    "en": "Which simple step helps slow the spread of antimicrobial resistance?"
+   },
+   "options": [
+    {
+     "kn": "ಸಮಯಕ್ಕೆ ಸರಿಯಾಗಿ ಲಸಿಕೆ ಮತ್ತು ಉತ್ತಮ ಸ್ವಚ್ಛತೆ",
+     "en": "Routine vaccination and good hygiene"
+    },
+    {
+     "kn": "ಪ್ರತಿ ಶೀತಕ್ಕೂ ಪ್ರತಿಜೀವಕ ತೆಗೆದುಕೊಳ್ಳುವುದು",
+     "en": "Taking antibiotics for every cold"
+    },
+    {
+     "kn": "ನೆರೆಹೊರೆಯವರೊಂದಿಗೆ ಔಷಧ ಹಂಚಿಕೊಳ್ಳುವುದು",
+     "en": "Sharing medicines with neighbours"
+    },
+    {
+     "kn": "ಕೈ ತೊಳೆಯುವುದನ್ನು ನಿಲ್ಲಿಸುವುದು",
+     "en": "Stopping handwashing"
+    }
+   ],
+   "correctIndex": 0,
+   "explanation": {
+    "kn": "ಉತ್ತಮ ಸ್ವಚ್ಛತೆ, ಸಮಯಕ್ಕೆ ಸರಿಯಾದ ಲಸಿಕೆ ಮತ್ತು ಸುರಕ್ಷಿತ ಆಹಾರ ತಯಾರಿಕೆಯಂತಹ ಸರಳ ಕ್ರಮಗಳು ನಿರೋಧ ಸೂಕ್ಷ್ಮಾಣುಗಳ ಹರಡುವಿಕೆಯನ್ನು ನಿಧಾನಗೊಳಿಸುತ್ತವೆ.",
+    "en": "Simple steps such as good hygiene, routine vaccination and safe food preparation slow the spread of antimicrobial-resistant germs."
+   },
+   "source": {
+    "documentId": "cdc-amr-causes-spread",
+    "url": "https://www.cdc.gov/antimicrobial-resistance/causes/index.html",
+    "passage": "such as good hygiene, routine vaccination, safer sex practices and safe food preparation."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc013",
+   "conceptTag": "correct-use",
+   "question": {
+    "kn": "ಶೀತಕ್ಕೆ ವೈದ್ಯರು ಪ್ರತಿಜೀವಕ ಕೊಡಲೇಬೇಕು ಎಂದು ಮನೆಯವರೊಬ್ಬರು ಹಠ ಮಾಡುತ್ತಾರೆ. ಸರಿಯಾದ ಸಂದೇಶ ಯಾವುದು?",
+    "en": "A family member insists the doctor must give an antibiotic for a cold. What is the right message?"
+   },
+   "options": [
+    {
+     "kn": "ಅತಿ ಬಲವಾದ ಪ್ರತಿಜೀವಕ ಕೇಳಿ",
+     "en": "Ask for the strongest antibiotic"
+    },
+    {
+     "kn": "ಬೇರೆ ಅಂಗಡಿಗೆ ಹೋಗಿ",
+     "en": "Go to another shop"
+    },
+    {
+     "kn": "ವೈದ್ಯರ ಮೇಲೆ ಒತ್ತಡ ಹಾಕಬೇಡಿ; ದೇಹ ಸೋಂಕಿನ ವಿರುದ್ಧ ಹೋರಾಡುವಾಗ ಆರಾಮವಾಗಿರಲು ಏನು ಮಾಡಬೇಕು ಎಂದು ಕೇಳಿ",
+     "en": "Do not pressure the doctor; ask how to feel better while the body fights the infection"
+    },
+    {
+     "kn": "ಬದಲಿಗೆ ಉಳಿದ ಮಾತ್ರೆ ಬಳಸಿ",
+     "en": "Use leftover tablets instead"
+    }
+   ],
+   "correctIndex": 2,
+   "explanation": {
+    "kn": "ಪ್ರತಿಜೀವಕ ಸೂಚಿಸುವಂತೆ ಆರೋಗ್ಯ ವೃತ್ತಿಪರರ ಮೇಲೆ ಎಂದಿಗೂ ಒತ್ತಡ ಹಾಕಬೇಡಿ. ದೇಹ ಸೋಂಕಿನ ವಿರುದ್ಧ ಹೋರಾಡುವಾಗ ಆರಾಮವಾಗಿರಲು ಸಲಹೆ ಕೇಳಿ.",
+    "en": "Never pressure a healthcare professional to prescribe an antibiotic. Ask for tips on how to feel better while the body fights off the infection."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Never pressure a healthcare professional to prescribe an antibiotic."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc014",
+   "conceptTag": "correct-use",
+   "question": {
+    "kn": "ಅನಗತ್ಯ ಪ್ರತಿಜೀವಕ ಬಳಕೆ ಮಕ್ಕಳ ವಿಷಯದಲ್ಲಿ ಯಾಕೆ ವಿಶೇಷ ಕಾಳಜಿ?",
+    "en": "Why is unnecessary antibiotic use a particular concern for children?"
+   },
+   "options": [
+    {
+     "kn": "ಮಕ್ಕಳಲ್ಲಿ ಔಷಧ ಸಂಬಂಧಿತ ತುರ್ತು ಚಿಕಿತ್ಸಾ ಭೇಟಿಗಳಿಗೆ ಪ್ರತಿಜೀವಕಗಳ ಅಡ್ಡ ಪರಿಣಾಮವೇ ಅತಿ ಸಾಮಾನ್ಯ ಕಾರಣ",
+     "en": "Antibiotic side effects are the most common cause of medicine-related emergency visits in children"
+    },
+    {
+     "kn": "ಮಕ್ಕಳಿಗೆ ಸೋಂಕು ಬರುವುದಿಲ್ಲ",
+     "en": "Children cannot catch infections"
+    },
+    {
+     "kn": "ಮಕ್ಕಳಲ್ಲಿ ಪ್ರತಿಜೀವಕಗಳು ಹೆಚ್ಚು ಚೆನ್ನಾಗಿ ಕೆಲಸ ಮಾಡುತ್ತವೆ",
+     "en": "Antibiotics work better in children"
+    },
+    {
+     "kn": "ಇದು ಕಾಳಜಿಯ ವಿಷಯವಲ್ಲ",
+     "en": "It is not a concern"
+    }
+   ],
+   "correctIndex": 0,
+   "explanation": {
+    "kn": "ಮಕ್ಕಳಲ್ಲಿ ಔಷಧ ಸಂಬಂಧಿತ ತುರ್ತು ವಿಭಾಗದ ಭೇಟಿಗಳಿಗೆ ಪ್ರತಿಜೀವಕಗಳ ಅಡ್ಡ ಪರಿಣಾಮಗಳೇ ಅತಿ ಸಾಮಾನ್ಯ ಕಾರಣ. ಮಗುವಿಗೆ ಅಡ್ಡ ಪರಿಣಾಮ ಕಂಡರೆ ಆರೋಗ್ಯ ವೃತ್ತಿಪರರನ್ನು ಸಂಪರ್ಕಿಸಿ.",
+    "en": "In children, side effects from antibiotics are the most common cause of medication-related emergency department visits. Call a healthcare professional if a child develops side effects."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "In children, side effects from antibiotics are the most common cause of medication-related emergency department visits."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  },
+  {
+   "id": "qc015",
+   "conceptTag": "sharing",
+   "question": {
+    "kn": "ನಿಮಗೆ ಸೂಚಿಸಿದ ಪ್ರತಿಜೀವಕದ ವಿಷಯದಲ್ಲಿ ಸರಿಯಾದ ಅಭ್ಯಾಸ ಯಾವುದು?",
+    "en": "What is the right practice with antibiotics prescribed to you?"
+   },
+   "options": [
+    {
+     "kn": "ಮನೆಯವರಿಗೆ ಅದೇ ಲಕ್ಷಣ ಇದ್ದರೆ ಹಂಚಿಕೊಳ್ಳಿ",
+     "en": "Share them with family if they have similar symptoms"
+    },
+    {
+     "kn": "ಮುಂದಿನ ಸಲಕ್ಕೆ ಅರ್ಧ ಇಟ್ಟುಕೊಳ್ಳಿ",
+     "en": "Keep half for next time"
+    },
+    {
+     "kn": "ನೆರೆಯವರಿಗೆ ಕೊಡಿ",
+     "en": "Give them to a neighbour"
+    },
+    {
+     "kn": "ಸೂಚಿಸಿದಂತೆಯೇ ತೆಗೆದುಕೊಳ್ಳಿ, ಬೇರೆಯವರೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ",
+     "en": "Take them exactly as prescribed and do not share them"
+    }
+   ],
+   "correctIndex": 3,
+   "explanation": {
+    "kn": "ಪ್ರತಿಜೀವಕಗಳನ್ನು ಸೂಚಿಸಿದಂತೆಯೇ ತೆಗೆದುಕೊಳ್ಳಿ. ಬೇರೆಯವರೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಬೇಡಿ ಮತ್ತು ಮುಂದಕ್ಕೆ ಉಳಿಸಿಟ್ಟುಕೊಳ್ಳಬೇಡಿ.",
+    "en": "Take antibiotics exactly as prescribed. Do not share them with others and do not save them for later."
+   },
+   "source": {
+    "documentId": "cdc-antibiotic-dos-donts",
+    "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+    "passage": "Do not share your antibiotics with others."
+   },
+   "origin": "ai-drafted",
+   "originNote": "Drafted by an AI assistant from the cited passage; the explanation closely follows the passage wording. The Kannada is a draft translation.",
+   "reviewStatus": "draft",
+   "review": {
+    "medicalAccuracy": null,
+    "kannada": null,
+    "reviewer": null,
+    "date": null
+   }
+  }
+ ]
+}

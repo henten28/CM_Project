@@ -4,6 +4,7 @@ import uuid
 from typing import Dict, List, Optional, Pattern, Tuple
 
 from agents.models import EscalationTask, SafetyResult
+from agents.transliterate import latin_keys
 
 # Deterministic guardrail. No model calls. Its result can never be overridden by an agent.
 # Priority: URGENT > DOSAGE > SELF_MEDICATION > PERSONAL_MEDICAL > SAFE
@@ -13,11 +14,13 @@ _MED = r"(antibiotics?|medicines?|medications?|tablets?|pills?|capsules?|drugs?|
 
 # (rule id, category, regex). English rules use word boundaries to avoid hitting teaching questions
 _EN_RULES: List[Tuple[str, str, str]] = [
-    ("U-EN-BREATH", "URGENT", r"\b(can'?t|cannot|not|difficulty|trouble|hard to)\s+(breathe?|breathing)\b|\bshort(ness)? of breath\b"),
+    ("U-EN-BREATH", "URGENT", r"\b(can'?t|cannot|not|difficulty|trouble|hard to)\s+(breathe?|breathing)\b|\b(not able|unable) to breathe\b|\bshort(ness)? of breath\b"),
     ("U-EN-CHEST", "URGENT", r"\bchest pain\b"),
     ("U-EN-CONSCIOUS", "URGENT", r"\b(unconscious|fainted|fainting|passed out|not waking|seizures?|fits|convulsions?)\b"),
     ("U-EN-ALLERGY", "URGENT", r"\b(allergic reaction|anaphylaxis|severe allergy)\b|\breaction (to|after|from)\b[^.?!]{0,25}\b" + _MED),
     ("U-EN-SWELL", "URGENT", r"\b(swelling|swollen)\b[^.?!]{0,30}\b(face|lips?|tongue|throat)\b"),
+    # "her lips are swollen": found by eval/retrieval_questions.json, needs team review
+    ("U-EN-SWELL-AFTER", "URGENT", r"\b(face|lips?|tongue|throat|eyes?)\b[^.?!]{0,20}\b(swollen|swelling|swelled)\b"),
     ("U-EN-RASH-AFTER", "URGENT", r"\b(rash|hives|swelling|itching)\b[^.?!]{0,40}\bafter\b[^.?!]{0,30}\b" + _MED),
     ("U-EN-BLEED", "URGENT", r"\bbleeding (heavily|a lot|won'?t stop)\b|\bblood in (vomit|stool|urine)\b"),
     ("U-EN-EMERGENCY", "URGENT", r"\bemergency\b"),
@@ -70,10 +73,24 @@ _KN_ROMAN_RULES: List[Tuple[str, str, str]] = [
     ("P-KNR-PREGNANT", "PERSONAL_MEDICAL", r"\b(garbhini|garbini)\b"),
 ]
 
+# More romanised Kannada (as typed on phones): NEEDS REVIEW by a native speaker before field use.
+# Matched against phonetic keys (agents/transliterate.py), so spelling variants (jwara / jvara, nanna / nana)
+# and the same words in Kannada script also match. Each pattern is a regex over space-separated keys.
+_KN_LATN_RULES: List[Tuple[str, str, str]] = [
+    ("U-KN-LATN", "URGENT", r"\b(usirat|usiru|usirad)\w* (kast|tondare|adtil|aduvudil|aguvudil)|\bede novu|\bprajne (ila|tapi)"
+                            r"|\b(muka|tuti|nalige|gantalu|kan)\w* ud\w*|\ballergy ag\w*|\brakta (barut|bart)\w*|\bmurce"),
+    ("D-KN-LATN", "DOSAGE", r"\bestu (dose|dosu|matre|tablet|mg|ml)|\bdose (estu|enu|heli)"),
+    ("S-KN-LATN", "SELF_MEDICATION", r"\byav\w* (osad|osadi|antibiotic|antibayotik|matre|tablet)\w*"
+                                     r"|\b(nanu|navu|nanage|nange|namage|namge)\b.{0,40}\b(tago|tegeduko|kod|nils|nilis)\w*(bahud\w*|li)\b"),
+    ("P-KN-LATN", "PERSONAL_MEDICAL", r"\bnana (magu|maga|ganda|hendati|ama|apa|tayi|tande|ajji|ajja)\w*"
+                                      r"|\b(nanage|nange|namage|namge)\b.{0,30}\b(jvar|kemu|sita|bedi|novu|vanti|husharila)\w*|\bgarbini"),
+]
+
 _PRIORITY = ["URGENT", "DOSAGE", "SELF_MEDICATION", "PERSONAL_MEDICAL"]
 
 _COMPILED: List[Tuple[str, str, Pattern]] = [(rid, cat, re.compile(rx, re.IGNORECASE))
                                              for rid, cat, rx in _EN_RULES + _KN_ROMAN_RULES]
+_COMPILED_KN_LATN: List[Tuple[str, str, Pattern]] = [(rid, cat, re.compile(rx)) for rid, cat, rx in _KN_LATN_RULES]
 
 # Fixed messages. kn/en copied verbatim from lib/safety.ts; hi NEEDS native review.
 _PRESCRIBING_KN = "AMR ಜಾಗೃತಿ ಔಷಧ ಸೂಚಿಸಲು ಅಥವಾ ಡೋಸ್ ಹೇಳಲು ಸಾಧ್ಯವಿಲ್ಲ. ಔಷಧಕ್ಕಾಗಿ ದಯವಿಟ್ಟು ಅರ್ಹ ವೈದ್ಯರ ಬಳಿ ತೆರಳಿ."
@@ -122,6 +139,10 @@ def classify(text: str) -> SafetyResult:
             hits.append((cat, rid))
     for rid, cat, phrases in _KN_RULES + _HI_RULES:
         if any(p.lower() in t for p in phrases):
+            hits.append((cat, rid))
+    keyed = " ".join(latin_keys(t))
+    for rid, cat, rx in _COMPILED_KN_LATN:
+        if rx.search(keyed):
             hits.append((cat, rid))
     if not hits:
         return SafetyResult(triggered=False, category="SAFE")

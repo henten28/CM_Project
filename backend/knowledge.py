@@ -1,7 +1,8 @@
 """Local, paragraph-aware retrieval for approved knowledge documents.
 
-No network requests or embedding service are used here. Retrieval is lexical, so
-queries in a different language from a document may not find matching evidence.
+No network requests or embedding service are used here. Retrieval is lexical. Kannada-script
+and romanised Kannada queries are expanded with English glossary terms (agents/glossary.py), but
+words outside the glossary still only match documents written in the same language.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from agents import glossary
 from agents.content import CONTENT_PATH
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
@@ -23,6 +25,7 @@ DOCUMENTS_DIR = KNOWLEDGE_DIR / "documents"
 MANIFEST_PATH = KNOWLEDGE_DIR / "sources.json"
 SEED_MANIFEST_PATH = KNOWLEDGE_DIR / "sources.seed.json"
 MAX_CHUNK_CHARS = 1600
+EXPANSION_WEIGHT = 0.6  # glossary-added terms count a little less than the words actually typed
 
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 _cache_lock = threading.RLock()
@@ -324,13 +327,23 @@ def _tokens(text: str) -> list[str]:
     return [token.casefold() for token in _TOKEN_RE.findall(text)]
 
 
-def search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+def _query_weights(query: str, expand: bool) -> dict[str, float]:
+    """Query terms and their weights. Glossary expansion adds English equivalents of Kannada-script
+    and romanised Kannada words at a lower weight, so an English source can answer a Kannada question."""
+    weights = {term: 1.0 for term in _tokens(query)}
+    if expand:
+        for term in _tokens(" ".join(glossary.expand(query).en)):
+            weights.setdefault(term, EXPANSION_WEIGHT)
+    return weights
+
+
+def search(query: str, limit: int = 5, expand: bool = True) -> list[dict[str, Any]]:
     """Return lexical matches in relevance order; no match returns no evidence."""
     if not isinstance(query, str) or not query.strip() or limit <= 0:
         return []
     _ensure_index()
-    terms = _tokens(query)
-    if not terms:
+    weights = _query_weights(query, expand)
+    if not weights:
         return []
     with _cache_lock:
         chunks = list(_cache_chunks)
@@ -340,17 +353,16 @@ def search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     doc_freq = Counter(term for terms_in_doc in tokenized for term in set(terms_in_doc))
     avg_length = sum(map(len, tokenized)) / max(1, len(tokenized))
     scored: list[tuple[float, int]] = []
-    unique_terms = set(terms)
     for index, tokens in enumerate(tokenized):
         frequencies = Counter(tokens)
         score = 0.0
-        for term in unique_terms:
+        for term, weight in weights.items():
             frequency = frequencies[term]
             if not frequency:
                 continue
             inverse = math.log(1 + (len(chunks) - doc_freq[term] + 0.5) / (doc_freq[term] + 0.5))
             denominator = frequency + 1.2 * (0.25 + 0.75 * len(tokens) / max(avg_length, 1))
-            score += inverse * (frequency * 2.2 / denominator)
+            score += weight * inverse * (frequency * 2.2 / denominator)
         if score > 0:
             scored.append((score, index))
     scored.sort(key=lambda pair: (-pair[0], chunks[pair[1]]["chunkId"]))

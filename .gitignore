@@ -52,6 +52,9 @@ backend/knowledge/sources.json
 backend/knowledge/documents/*
 !backend/knowledge/documents/.gitkeep
 !backend/knowledge/documents/cdc-amr-basics.md
+!backend/knowledge/documents/cdc-antibiotic-dos-donts.md
+!backend/knowledge/documents/cdc-handwashing.md
+!backend/knowledge/documents/cdc-amr-causes-spread.md
 
 # local database files and SQLite journals
 *.db

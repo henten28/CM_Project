@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLang } from "@/lib/prefs";
+import { getLang, tr, useLang } from "@/lib/prefs";
 import { getSession, approvePlan, submitAnswers, askQuestion, completeSession, resumeSession, pick, voiceLang,
   type SessionRecord, type ContentHit, type QuizItem, type SessionSummary, type SafetyResult, type Level } from "@/lib/api-client";
 import { recordGap, getDueReviews } from "@/lib/spaced-repetition";
@@ -143,12 +143,20 @@ function SessionContent() {
 
   // Init
   useEffect(() => {
+    // a later run (React's development mode starts effects twice) or leaving the page cancels this one,
+    // so its late results do not add a second set of messages
+    let cancelled = false;
     async function init() {
-      setAgentStatus(L("ಯೋಜನಾ ಏಜೆಂಟ್ ಕೆಲಸ ಮಾಡುತ್ತಿದೆ…","Planning Agent working…","योजना एजेंट काम कर रहा है…"));
+      // this runs on the first render, when `lang` can still hold the server default (Kannada) before the
+      // saved choice loads; read the saved preference so the messages written now use the chosen language
+      const saved = getLang();
+      const T = (kn: string, en: string, hi = "") => tr(saved, kn, en, hi);
+      setAgentStatus(T("ಯೋಜನಾ ಏಜೆಂಟ್ ಕೆಲಸ ಮಾಡುತ್ತಿದೆ…","Planning Agent working…","योजना एजेंट काम कर रहा है…"));
       setPhase("planning");
       let s: SessionRecord;
       try { s = await getSession(sessionId); }
-      catch { router.push("/"); return; }
+      catch { if (!cancelled) router.push("/"); return; }
+      if (cancelled) return;
       setSession(s);
       setAgentStatus(null);
       if (s.state === "SAFETY_HOLD") {
@@ -161,24 +169,26 @@ function SessionContent() {
         // reloaded mid-session: the backend rebuilds lessons, pending questions and progress
         try {
           const r = await resumeSession(sessionId);
+          if (cancelled) return;
           setBlocks(r.content.hits);
           setQuestions(r.questions);
           setQuizTotal(r.progress.answered);
           setQuizCorrect(r.progress.correct);
           setLevel(r.progress.level);
-          pushMsg({role:"system",text:L("↻ ಅಧಿವೇಶನ ಮುಂದುವರಿಸಲಾಗಿದೆ.","↻ Session resumed.","↻ सत्र फिर से शुरू हुआ।")});
+          pushMsg({role:"system",text:T("↻ ಅಧಿವೇಶನ ಮುಂದುವರಿಸಲಾಗಿದೆ.","↻ Session resumed.","↻ सत्र फिर से शुरू हुआ।")});
           // nothing answered yet: back to the lesson; otherwise straight to the remaining questions
           setPhase(r.progress.answered === 0 ? "teaching" : r.questions.length ? "quiz" : "hold");
-        } catch (e) { showError(e); setPhase("hold"); }
+        } catch (e) { if (!cancelled) { showError(e); setPhase("hold"); } }
         return;
       }
-      pushMsg({role:"agent",agentName:L("ಯೋಜನಾ ಏಜೆಂಟ್","Planning Agent","योजना एजेंट"),
-        text:L(`ನಮಸ್ಕಾರ! "${s.topic}" ವಿಷಯಕ್ಕಾಗಿ ${s.durationMinutes} ನಿಮಿಷದ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧ. ದಯವಿಟ್ಟು ಪರಿಶೀಲಿಸಿ.`,
+      pushMsg({role:"agent",agentName:T("ಯೋಜನಾ ಏಜೆಂಟ್","Planning Agent","योजना एजेंट"),
+        text:T(`ನಮಸ್ಕಾರ! "${s.topic}" ವಿಷಯಕ್ಕಾಗಿ ${s.durationMinutes} ನಿಮಿಷದ ಪಾಠ ಯೋಜನೆ ಸಿದ್ಧ. ದಯವಿಟ್ಟು ಪರಿಶೀಲಿಸಿ.`,
                `Hello! ${s.durationMinutes}-min lesson plan for "${s.topic}" is ready. Please review it.`,
                `नमस्ते! "${s.topic}" के लिए ${s.durationMinutes} मिनट की पाठ योजना तैयार है।`)});
       setPhase("approval");
     }
     if (sessionId) init();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 

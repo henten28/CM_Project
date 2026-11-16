@@ -122,7 +122,7 @@ The OpenAI key is needed for quiz generation and regeneration only. Editing, pub
 
 Drafting, review and publication require a signed-in ASHA worker; published quizzes and attempts are public so households can use them without an account. Learner routes hide drafts and answer keys. Learners do not need their own OpenAI key. To share with other devices, host the same frontend and backend where those devices can reach them; a `localhost` link only works on the machine running the app.
 
-The included CDC source and the document-addition instructions below apply to quiz generation. Source admission is separate from ASHA review: exact quote checks confirm that a passage exists, while the reviewer checks that it actually supports the answer. Broader source collection and a reusable, clinically reviewed question bank remain follow-up content work.
+The included CDC sources and the document-addition instructions below apply to quiz generation. Source admission is separate from ASHA review: exact quote checks confirm that a passage exists, while the reviewer checks that it actually supports the answer. Broader source collection and a reusable, clinically reviewed question bank remain follow-up content work.
 
 ## LLM-driven sessions with ASHA review
 
@@ -134,11 +134,22 @@ This experimental page is ASHA-only; its review and learner views share the ASHA
 
 ### Adding documents later
 
-A starter source is included: selected passages from the [CDC AMR overview](https://www.cdc.gov/antimicrobial-resistance/about/), stored in `backend/knowledge/documents/cdc-amr-basics.md` and registered in `backend/knowledge/sources.seed.json`. This is a local text excerpt, not a full clinical reference or an endorsement by CDC. Its English source supports the demo; generated translations must be checked by the reviewer.
+Four curated sources are bundled and registered in `backend/knowledge/sources.seed.json`. Each is a set of selected passages copied word for word from a public-domain CDC page:
 
-Teammates can add PDF (with selectable text), Markdown and plain-text files to `backend/knowledge/documents/`, then register them in the local `sources.json` manifest. See [the document-store instructions](backend/knowledge/README.md) for the exact format. Source retrieval is local and requires no embeddings service, extra API key or AWS account. Remote URLs are attribution metadata, not instructions for automatic downloading. The content collection can be completed separately from this implementation.
+| File | Official page | Covers |
+|---|---|---|
+| `cdc-amr-basics.md` | [About Antimicrobial Resistance](https://www.cdc.gov/antimicrobial-resistance/about/) | What AMR is, germs not the body, viruses |
+| `cdc-antibiotic-dos-donts.md` | [Healthy Habits: Antibiotic Do's and Don'ts](https://www.cdc.gov/antibiotic-use/about/index.html) | Viruses and colds, taking as prescribed, sharing, saving for later, side effects |
+| `cdc-handwashing.md` | [About Handwashing](https://www.cdc.gov/clean-hands/about/index.html) | Why, when and how to wash hands |
+| `cdc-amr-causes-spread.md` | [AMR: Causes and How It Spreads](https://www.cdc.gov/antimicrobial-resistance/causes/index.html) | Spread in communities, between people, animals and food, prevention |
 
-Source approval means the file is admitted to the retrieval corpus; it does not approve generated content. Each generated item must cite a passage actually retrieved during that session. The app checks the quoted passage against the retrieved text and ASHA checks whether it supports the claim and answer. Exact quote matching alone cannot establish medical accuracy. Scanned PDFs require OCR before import. Retrieval is lexical; English search terms work best with the bundled English source.
+These are local excerpts, not full clinical references or an endorsement by CDC. Their English text supports the demo; generated translations must be checked by the reviewer.
+
+India-specific and WHO sources (NAP-AMR 2.0 and 2017, NHSRC ASHA training modules, the WHO AMR fact sheet and public awareness survey, and four open-access Indian studies) are listed in `backend/knowledge/catalog.json`. They are not committed: `python fetch_sources.py` downloads them from each publisher into the git-ignored documents folder and registers them as `approved: false` until someone reviews them. See [the document-store instructions](backend/knowledge/README.md).
+
+Teammates can also add their own PDF (with selectable text), Markdown and plain-text files to `backend/knowledge/documents/`, then register them in the local `sources.json` manifest. Source retrieval is local and requires no embeddings service, extra API key or AWS account. Remote URLs in the manifest are attribution metadata; the backend never downloads them.
+
+Source approval means the file is admitted to the retrieval corpus; it does not approve generated content. Each generated item must cite a passage actually retrieved during that session. The app checks the quoted passage against the retrieved text and ASHA checks whether it supports the claim and answer. Exact quote matching alone cannot establish medical accuracy. Scanned PDFs require OCR before import. Retrieval is lexical, with Kannada-English glossary expansion (see [Glossary and transliteration](#glossary-and-transliteration)), so Kannada-script and romanised Kannada questions can find English passages when they use glossary terms.
 
 ### Inspecting calls and limiting cost
 
@@ -231,10 +242,14 @@ CM_Project/
    |  '- models.py             Pydantic models for every agent input and output
    |- quiz_bank.py             grounded batch drafts, immutable versions and scored attempts
    |- agent_loop.py            optional step-by-step Responses tool loop and persistence
-   |- knowledge.py, knowledge/ local document retrieval, manifests and official demo excerpt
+   |- knowledge.py, knowledge/ local document retrieval, manifests, curated CDC excerpts, source catalogue
+   |- fetch_sources.py         downloads catalogued official sources into the local corpus for review
    |- services/                  OpenAI and Bedrock structured-output adapters
    |- content/modules.json     versioned content, quiz bank, source IDs, follow-up texts
-   |- eval/                    evaluation scenarios, runner and latest report
+   |- content/glossary.json    Kannada-English-romanised AMR glossary for query expansion
+   |- content/question_candidates.json  draft source-backed quiz questions awaiting review
+   |- agents/glossary.py, agents/transliterate.py  query expansion and Kannada romanisation
+   |- eval/                    evaluation scenarios, labelled retrieval questions, runners and latest reports
    |- tests/                   pytest tests
    |- requirements.txt, requirements-dev.txt
    '- .env.example
@@ -500,6 +515,7 @@ Resume after a page reload (returns the lesson content, unanswered questions and
 **Message sources:**
 - Kannada and English messages are copied word for word from the team's original `lib/safety.ts`.
 - Hindi messages and Hindi trigger phrases are new and **need review by a native speaker** before field use.
+- Romanised Kannada trigger patterns are new and **need review by a native speaker**. There are two sets, and both run. `_KN_ROMAN_RULES` matches typed words directly. `_KN_LATN_RULES` (for example "nanna maguvige jwara", "eshtu dose", "usiru kashta") matches on phonetic keys, so it also catches spelling variants and the same phrases in Kannada script. Two English urgent patterns were also widened: "lips are swollen" and "not able to breathe". Both gaps were found by the labelled question set.
 
 ## Database
 
@@ -536,7 +552,29 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-116 tests (plus 1 skipped on Windows), all in mock mode, each run against a throwaway database. They cover sign-in and role separation, visits, the LLM agents' validation and safety screening with a fake model, romanised Kannada safety rules, the session flow, plans fitting 5, 10 and 15 minutes, prior gaps, rejection of invalid model plans, retrieval refinement, the score thresholds, ASHA plan edits, safety routing in English, Kannada and Hindi, questions that must not trigger the safety controller, referral privacy, the audit log, persistence across a restart, resume, the dashboard endpoints, the content repository checks, and the evaluation scenarios.
+164 tests (one is skipped on Windows), all in mock mode, each run against a throwaway database. They cover sign-in and role separation, visits, the LLM agents' validation and safety screening with a fake model, romanised Kannada safety rules, the session flow, plans fitting 5, 10 and 15 minutes, prior gaps, rejection of invalid model plans, retrieval refinement, the score thresholds, ASHA plan edits, safety routing in English, Kannada and Hindi, questions that must not trigger the safety controller, referral privacy, the audit log, persistence across a restart, resume, the dashboard endpoints, the content repository checks, the evaluation scenarios, transliteration and the glossary, the labelled question set, the source catalogue and download script, and the draft question bank.
+
+### Retrieval evaluation (labelled question set)
+
+```bash
+cd backend
+python -m eval.retrieval_eval
+```
+
+`eval/retrieval_questions.json` holds 93 realistic household and ASHA questions: 31 intents, each written in English, Kannada script and romanised Kannada. Each teaching question is tagged with the approved blocks in `content/modules.json` and the corpus passages that answer it; 15 questions are tagged with the safety category they should trigger. The runner compares plain keyword search with glossary-expanded search and writes `eval/retrieval_report.json` and `eval/retrieval_report.md`. Rerun it whenever search, content or the glossary changes to get before/after numbers.
+
+Latest run (2026-11-16, top-3 hits):
+
+| | Keyword only | With glossary |
+|---|---|---|
+| Lesson blocks, English | 21/25 | 24/25 |
+| Lesson blocks, Kannada script | 19/25 | 25/25 |
+| Lesson blocks, romanised Kannada | 14/25 | 25/25 |
+| Corpus passages, English | 15/22 | 17/22 |
+| Corpus passages, Kannada script | 0/22 | 17/22 |
+| Corpus passages, romanised Kannada | 3/22 | 17/22 |
+
+Safety routing on the same set: 6/15 unsafe questions were routed correctly on `main`, 11/15 with the word-pattern romanised rules (`_KN_ROMAN_RULES`) and the two English fixes, and 15/15 with the phonetic-key rules (`_KN_LATN_RULES`) added. There is one false alarm on 78 teaching questions. That false alarm comes from an existing English dose rule. The question set and its labels are AI-drafted and marked `draft`: a native Kannada speaker and a team member should check them before these numbers are quoted as final. Because the glossary and the new safety phrases were written while looking at this set, also report results on fresh questions that were not used for tuning.
 
 ### Evaluation (proposal section 6)
 
@@ -583,6 +621,14 @@ All lesson content lives in `backend/content/modules.json`. To add a content blo
 Agents only ever see `approved` items. Raise `contentVersion` at the top of the file when you change content. Then run `pytest -q` in `backend/`: `tests/test_content.py` fails with a clear message if a field is missing, a source or module does not exist, the Kannada text is missing, or a quiz question has no approved block for reinforcement.
 
 Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, NHM ASHA training modules). Never add content with medicine names and doses, such as treatment guidelines.
+
+### Draft question bank
+
+`backend/content/question_candidates.json` holds 15 draft quiz questions in English and Kannada. Each one cites a passage that appears word for word in a bundled corpus source, with its URL, and records its origin: `copied`, `adapted` or `ai-drafted`. All 15 are `ai-drafted` and `reviewStatus: draft`, so the app ignores them. To promote one, a team member checks the answer key, explanation and passage, and a Kannada speaker checks the translation. Then fill in its `review` record, copy it into the `quiz` list in `modules.json` with a new id and `reviewStatus: approved`, and raise `contentVersion`. These questions cite public-awareness sources; do not describe them as government-approved. `tests/test_sources_and_candidates.py` checks the passages, the concept tags and the absence of doses.
+
+### Glossary and transliteration
+
+`backend/content/glossary.json` maps about 60 AMR terms between English, Kannada script and common romanised spellings (for example antibiotic = ಆ್ಯಂಟಿಬಯೋಟಿಕ್ / ಪ್ರತಿಜೀವಕ = antibayotik / pratijeevaka). `agents/transliterate.py` romanises Kannada script and folds spelling variants together (jwara / jvara, maatre / mathre), so a romanised or inflected word still matches its glossary entry. Both retrievers expand queries with it; pass `expand=False` to `retrieval_agent.search` or `knowledge.search` for plain keyword search. To add a term, add an entry with `en`, `kn`, `knLatn` and the concept `tags` it points at, then rerun `pytest` and `python -m eval.retrieval_eval`. [AI4Bharat IndicXlit](https://github.com/AI4Bharat/IndicXlit) can suggest more romanised variants for review. The glossary only widens search; it never changes lesson text or safety messages.
 
 ## What has been built so far
 
@@ -631,12 +677,19 @@ Only add public-awareness material (NCDC, NAP-AMR 2.0, WHO awareness messages, N
 
 ## Known limitations and next steps
 
-- **Agent evaluation is still narrow.** The live evaluation measures plan validity and safety routing; the retrieval, tutor and summary agents' output quality is not yet scored. Planned next: retrieval hit-rate on a labelled question set (including romanised Kannada) and a rubric-based check of tutor tips and summaries.
+- **Agent evaluation is still narrow.** The live evaluation measures plan validity and safety routing. The labelled question set (see [Retrieval evaluation](#retrieval-evaluation-labelled-question-set)) now scores keyword and glossary retrieval, including romanised Kannada; the LLM-assisted search and the tutor and summary agents' output quality are not yet scored. Planned next: run the labelled set through `agentic_search` with a live model, and a rubric-based check of tutor tips and summaries.
 - **New interface text in Kannada and Hindi** (menus, headings, home page sections) was written for the redesign and should be checked by native speakers. Lesson content is unchanged.
 - **There is no reviewed Hindi content yet.** Hindi sessions show English lesson text, and the Hindi safety phrases and messages need native review.
-- **Next task: expand the source-backed question bank.** The current library has 15 blocks and only 5 quiz questions. Find suitable official questions or draft additional questions from official guidance, recording per-question source URLs, supporting passages and whether each question is copied, adapted or AI-drafted. Check answers, explanations and translations before marking items approved; do not describe source-based drafts as government-approved. Keep this expansion separate from the current OpenAI setup task; see [Adding content](#adding-content).
 - **Demo accounts and passwords are public** (listed above and on the sign-in page). Change them or set `SEED_DEMO_USERS=false` before any real use.
 - **Generated Kannada text** (tutor tips, summary recaps) and the romanised Kannada safety phrases need native-speaker review.
+- **Next task: review and grow the source-backed question bank.** The approved library still has 15 blocks and 5 quiz questions. The following are now in place but still need human review:
+  - 15 draft questions with source URLs, verbatim passages and origin, in `content/question_candidates.json`;
+  - four curated CDC sources;
+  - a catalogue of India-specific sources in `knowledge/catalog.json`.
+
+  Check the answers, explanations and translations before marking items approved, and do not describe source-based drafts as government-approved. Review the downloaded NAP-AMR, NHSRC and WHO files (`python fetch_sources.py`) and approve the suitable ones, then draft India-specific questions from them. No official Kannada text source was found; NCDC's Kannada material is audio and video only. See [Adding content](#adding-content).
+- **Content gaps found by the labelled question set.** No approved block covers "antibiotics also kill helpful germs". No corpus passage yet supports the questions on buying without a prescription, warning signs, the ASHA role or community leaders. The NAP-AMR and ASHA module downloads may fill these.
+- **Embeddings next.** The labelled question set now gives before/after numbers. Try multilingual embeddings (OpenAI's embedding API or an open multilingual model) as an alternative to glossary keyword search, and keep them only if the numbers improve.
 - **The local database is per person.** For one shared dashboard across several phones, the backend and database need to be hosted in one place.
 - **Profile display details and spaced-repetition gaps** are still kept in each browser's localStorage (visits and coverage are now on the backend).
 - The unused TypeScript mock agents and routes were removed in the mid-term update; they remain in git history.

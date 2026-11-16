@@ -1,0 +1,211 @@
+{
+  "generatedAt": "2026-11-16T09:48:55+00:00",
+  "questionSet": {
+    "version": 1,
+    "reviewStatus": "draft",
+    "count": 93,
+    "byLang": {
+      "en": 31,
+      "kn": 31,
+      "kn-Latn": 31
+    }
+  },
+  "contentVersion": "2026.10.0",
+  "corpus": [
+    "cdc-amr-basics",
+    "cdc-antibiotic-dos-donts",
+    "cdc-handwashing",
+    "cdc-amr-causes-spread"
+  ],
+  "topK": 5,
+  "blocks": {
+    "keyword": {
+      "all": {
+        "n": 75,
+        "hit@1": 44,
+        "hit@3": 54,
+        "hit@5": 60,
+        "mrr": 0.663
+      },
+      "en": {
+        "n": 25,
+        "hit@1": 16,
+        "hit@3": 21,
+        "hit@5": 25,
+        "mrr": 0.767
+      },
+      "kn": {
+        "n": 25,
+        "hit@1": 15,
+        "hit@3": 19,
+        "hit@5": 19,
+        "mrr": 0.673
+      },
+      "kn-Latn": {
+        "n": 25,
+        "hit@1": 13,
+        "hit@3": 14,
+        "hit@5": 16,
+        "mrr": 0.549
+      }
+    },
+    "glossary": {
+      "all": {
+        "n": 75,
+        "hit@1": 66,
+        "hit@3": 74,
+        "hit@5": 74,
+        "mrr": 0.927
+      },
+      "en": {
+        "n": 25,
+        "hit@1": 22,
+        "hit@3": 24,
+        "hit@5": 24,
+        "mrr": 0.913
+      },
+      "kn": {
+        "n": 25,
+        "hit@1": 22,
+        "hit@3": 25,
+        "hit@5": 25,
+        "mrr": 0.933
+      },
+      "kn-Latn": {
+        "n": 25,
+        "hit@1": 22,
+        "hit@3": 25,
+        "hit@5": 25,
+        "mrr": 0.933
+      }
+    }
+  },
+  "passages": {
+    "keyword": {
+      "all": {
+        "n": 66,
+        "hit@1": 8,
+        "hit@3": 18,
+        "hit@5": 19,
+        "mrr": 0.192
+      },
+      "en": {
+        "n": 22,
+        "hit@1": 7,
+        "hit@3": 15,
+        "hit@5": 15,
+        "mrr": 0.485
+      },
+      "kn": {
+        "n": 22,
+        "hit@1": 0,
+        "hit@3": 0,
+        "hit@5": 0,
+        "mrr": 0.0
+      },
+      "kn-Latn": {
+        "n": 22,
+        "hit@1": 1,
+        "hit@3": 3,
+        "hit@5": 4,
+        "mrr": 0.092
+      }
+    },
+    "glossary": {
+      "all": {
+        "n": 66,
+        "hit@1": 39,
+        "hit@3": 51,
+        "hit@5": 56,
+        "mrr": 0.687
+      },
+      "en": {
+        "n": 22,
+        "hit@1": 11,
+        "hit@3": 17,
+        "hit@5": 18,
+        "mrr": 0.625
+      },
+      "kn": {
+        "n": 22,
+        "hit@1": 14,
+        "hit@3": 17,
+        "hit@5": 19,
+        "mrr": 0.717
+      },
+      "kn-Latn": {
+        "n": 22,
+        "hit@1": 14,
+        "hit@3": 17,
+        "hit@5": 19,
+        "mrr": 0.717
+      }
+    }
+  },
+  "safety": {
+    "all": {
+      "n": 93,
+      "correct": 92,
+      "unsafeRouted": "15/15",
+      "falseAlarms": "1/78"
+    },
+    "en": {
+      "n": 31,
+      "correct": 30,
+      "unsafeRouted": "5/5",
+      "falseAlarms": "1/26"
+    },
+    "kn": {
+      "n": 31,
+      "correct": 31,
+      "unsafeRouted": "5/5",
+      "falseAlarms": "0/26"
+    },
+    "kn-Latn": {
+      "n": 31,
+      "correct": 31,
+      "unsafeRouted": "5/5",
+      "falseAlarms": "0/26"
+    }
+  },
+  "misses": {
+    "blocks@3": [
+      "Q013"
+    ],
+    "passages@3": [
+      "Q001",
+      "Q002",
+      "Q003",
+      "Q010",
+      "Q011",
+      "Q012",
+      "Q019",
+      "Q020",
+      "Q021",
+      "Q028",
+      "Q041",
+      "Q042",
+      "Q076",
+      "Q077",
+      "Q078"
+    ],
+    "safety": [
+      {
+        "id": "Q022",
+        "lang": "en",
+        "expected": "SAFE",
+        "got": "DOSAGE",
+        "ruleId": "D-EN-AMOUNT"
+      }
+    ]
+  },
+  "contentGaps": [
+    "G22: helpful germs"
+  ],
+  "noCorpusPassage": [
+    "G11: buying without prescription",
+    "G12: warning signs",
+    "G13: ASHA role",
+    "G20: community leaders"
+  ]
+}

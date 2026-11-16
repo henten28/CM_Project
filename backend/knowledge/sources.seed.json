@@ -9,6 +9,36 @@
       "approved": true,
       "provenance": "official-source-excerpt",
       "origin": "Selected passages checked against the official CDC page on 2026-11-10. Source admission for this demo is separate from ASHA approval of generated activities."
+    },
+    {
+      "id": "cdc-antibiotic-dos-donts",
+      "title": "CDC — Healthy Habits: Antibiotic Do's and Don'ts (selected excerpts)",
+      "publisher": "U.S. Centers for Disease Control and Prevention",
+      "url": "https://www.cdc.gov/antibiotic-use/about/index.html",
+      "file": "cdc-antibiotic-dos-donts.md",
+      "approved": true,
+      "provenance": "official-source-excerpt",
+      "origin": "Selected passages copied from the official CDC page on 2026-11-16 (US federal public-domain text). Source admission for this demo is separate from ASHA approval of generated activities."
+    },
+    {
+      "id": "cdc-handwashing",
+      "title": "CDC — About Handwashing (selected excerpts)",
+      "publisher": "U.S. Centers for Disease Control and Prevention",
+      "url": "https://www.cdc.gov/clean-hands/about/index.html",
+      "file": "cdc-handwashing.md",
+      "approved": true,
+      "provenance": "official-source-excerpt",
+      "origin": "Selected passages copied from the official CDC page on 2026-11-16 (US federal public-domain text). Source admission for this demo is separate from ASHA approval of generated activities."
+    },
+    {
+      "id": "cdc-amr-causes-spread",
+      "title": "CDC — Antimicrobial Resistance: Causes and How It Spreads (selected excerpts)",
+      "publisher": "U.S. Centers for Disease Control and Prevention",
+      "url": "https://www.cdc.gov/antimicrobial-resistance/causes/index.html",
+      "file": "cdc-amr-causes-spread.md",
+      "approved": true,
+      "provenance": "official-source-excerpt",
+      "origin": "Selected passages copied from the official CDC page on 2026-11-16 (US federal public-domain text). Source admission for this demo is separate from ASHA approval of generated activities."
     }
   ]
 }
